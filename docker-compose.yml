@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: policehq_mongodb
+    restart: always
+    environment:
+      MONGO_INITDB_DATABASE: policehq_geoattend
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - policehq_net
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: policehq_backend
+    restart: always
+    environment:
+      - MONGODB_URI=mongodb://mongodb:27017
+      - MONGODB_DB_NAME=policehq_geoattend
+      - JWT_SECRET_KEY=policehq_super_secure_jwt_secret_key_eluru_2026_production
+      - ENVIRONMENT=production
+      - HOST=0.0.0.0
+      - PORT=8000
+    ports:
+      - "8000:8000"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - policehq_net
+
+  admin_web:
+    build:
+      context: ./admin-web
+      dockerfile: Dockerfile
+    container_name: policehq_admin_web
+    restart: always
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - policehq_net
+
+networks:
+  policehq_net:
+    driver: bridge
+
+volumes:
+  mongo_data:
+    driver: local
