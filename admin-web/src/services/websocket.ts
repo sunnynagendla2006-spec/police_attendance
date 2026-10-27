@@ -25,7 +25,7 @@ const getWsUrl = (): string => {
     return `${wsScheme}${hostPath}/api/v1/ws`;
   }
 
-  return 'ws://localhost:8000/api/v1/ws';
+  return 'wss://police-attendance.onrender.com/api/v1/ws';
 };
 
 class WebSocketClient {

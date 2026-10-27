@@ -25,7 +25,7 @@ const getApiBase = (): string => {
     }
     return `${trimmed}/api/v1`;
   }
-  return 'http://localhost:8000/api/v1';
+  return 'https://police-attendance.onrender.com/api/v1';
 };
 
 export const API_BASE = getApiBase();
