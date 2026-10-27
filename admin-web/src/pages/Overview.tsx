@@ -105,12 +105,17 @@ export const Overview: React.FC<Props> = ({ onNavigate }) => {
     window.addEventListener('policehq_hq_entry', handleRefresh);
     window.addEventListener('policehq_hq_exit', handleRefresh);
     window.addEventListener('policehq_geofence_config_updated', handleRefresh);
+    window.addEventListener('policehq_officer_location_updated', handleRefresh);
+
+    const interval = setInterval(fetchOverviewData, 15000);
 
     return () => {
       window.removeEventListener('policehq_manual_refresh', handleRefresh);
       window.removeEventListener('policehq_hq_entry', handleRefresh);
       window.removeEventListener('policehq_hq_exit', handleRefresh);
       window.removeEventListener('policehq_geofence_config_updated', handleRefresh);
+      window.removeEventListener('policehq_officer_location_updated', handleRefresh);
+      clearInterval(interval);
     };
   }, []);
 
