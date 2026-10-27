@@ -259,7 +259,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            'Sign in with your Mobile Number, Officer ID, or Username. Your password is the last 4 digits of your mobile number.',
+                            'Sign in with your authorized credentials to access officer duty and attendance tracking.',
                             style: TextStyle(
                               color: AppTheme.textSecondary,
                               fontSize: 12,
@@ -304,7 +304,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: const TextStyle(color: AppTheme.textMain),
                     decoration: const InputDecoration(
                       labelText: 'Mobile Number / Officer ID / Username',
-                      hintText: 'e.g. 8121216628 or N210842',
                       prefixIcon: Icon(Icons.phone_android, color: AppTheme.textSecondary),
                     ),
                     textInputAction: TextInputAction.next,
@@ -319,7 +318,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: const TextStyle(color: AppTheme.textMain),
                     decoration: InputDecoration(
                       labelText: 'Password',
-                      hintText: 'Last 4 digits of mobile (e.g. 6628)',
                       prefixIcon: const Icon(Icons.lock_outline, color: AppTheme.textSecondary),
                       suffixIcon: IconButton(
                         icon: Icon(

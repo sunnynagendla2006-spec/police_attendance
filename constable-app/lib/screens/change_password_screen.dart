@@ -187,8 +187,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                     obscureText: _obscureOld,
                     style: const TextStyle(color: AppTheme.textMain),
                     decoration: InputDecoration(
-                      labelText: 'Current Initial Password',
-                      hintText: '4-digit mobile suffix',
+                      labelText: 'Current Password',
                       prefixIcon: const Icon(Icons.lock_open, color: AppTheme.textSecondary),
                       suffixIcon: IconButton(
                         icon: Icon(_obscureOld ? Icons.visibility_outlined : Icons.visibility_off_outlined, color: AppTheme.textSecondary),

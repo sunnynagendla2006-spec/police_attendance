@@ -28,10 +28,6 @@ export const Login: React.FC<Props> = ({ onSuccess }) => {
     }
   };
 
-  const fillCredentials = (u: string, p: string) => {
-    setUsername(u);
-    setPassword(p);
-  };
 
   return (
     <div className="min-h-screen bg-[#F5F7FA] flex flex-col justify-center items-center px-4 font-sans select-none">
@@ -72,7 +68,6 @@ export const Login: React.FC<Props> = ({ onSuccess }) => {
                 required
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="e.g. 8121216628, N210842, or superadmin"
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#2563EB] focus:bg-white transition"
               />
             </div>
@@ -80,7 +75,7 @@ export const Login: React.FC<Props> = ({ onSuccess }) => {
 
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              Password / Last 4 Digits
+              Password
             </label>
             <div className="relative">
               <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
@@ -89,7 +84,6 @@ export const Login: React.FC<Props> = ({ onSuccess }) => {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="•••••••••••• (Account password or mobile last 4 digits)"
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-10 py-2.5 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#2563EB] focus:bg-white transition"
               />
               <button
@@ -111,33 +105,8 @@ export const Login: React.FC<Props> = ({ onSuccess }) => {
           </button>
         </form>
 
-        {/* Quick Demo Credentials Autofill */}
-        <div className="mt-8 pt-5 border-t border-slate-100 text-center">
-          <p className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider mb-2.5">
-            Official Seed Credentials
-          </p>
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <button
-              type="button"
-              onClick={() => fillCredentials('superadmin', 'SuperAdmin@Eluru1')}
-              className="p-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-left transition"
-            >
-              <span className="font-bold text-[#17365D] block text-xs">Super Admin</span>
-              <span className="text-[10px] text-slate-500 font-mono block">superadmin</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => fillCredentials('hqadmin', 'HQAdmin@Eluru1')}
-              className="p-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-left transition"
-            >
-              <span className="font-bold text-[#17365D] block text-xs">HQ Admin</span>
-              <span className="text-[10px] text-slate-500 font-mono block">hqadmin</span>
-            </button>
-          </div>
-        </div>
-
         {/* Footer Audit Notice */}
-        <div className="mt-6 text-center text-[11px] text-slate-400">
+        <div className="mt-8 text-center text-[11px] text-slate-400 border-t border-slate-100 pt-5">
           Official Government Police System • Unauthorized Access Barred
         </div>
       </div>
