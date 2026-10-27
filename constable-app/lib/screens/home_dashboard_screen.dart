@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../core/constants.dart';
 import '../core/theme.dart';
 import '../models/user_model.dart';
 import '../models/attendance_model.dart';
@@ -48,36 +47,103 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   }
 
   Future<void> _initializeData() async {
-    setState(() => _isLoading = true);
-    try {
-      final user = await _apiService.getMe();
-      final visits = await _apiService.getMyAttendance();
-      final queued = await _queueService.getQueuedCount();
-
+    // 1. Immediately display cached user profile so there is no empty state
+    final cachedUser = await _apiService.getCachedUser();
+    if (cachedUser != null && mounted) {
       setState(() {
-        _user = user;
-        _todayVisits = visits;
-        _queuedCount = queued;
+        _user = cachedUser;
         _isLoading = false;
       });
-
-      // Initialize location service
-      await _locationService.initialize();
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
     }
+
+    // 2. Load cached headquarters into location tracking
+    final cachedHq = await _apiService.getCachedHeadquarters();
+    if (cachedHq != null) {
+      _locationService.updateHeadquarters(
+        name: cachedHq.name,
+        lat: cachedHq.latitude,
+        lon: cachedHq.longitude,
+        radius: cachedHq.radiusMeters,
+      );
+    }
+
+    // 3. Fetch fresh user profile from backend
+    try {
+      final user = await _apiService.getMe();
+      if (mounted) {
+        setState(() => _user = user);
+      }
+    } catch (e) {
+      debugPrint('Note: /auth/me fetch error: $e');
+    }
+
+    // 4. Fetch dynamic active headquarters (updated by admin on web)
+    try {
+      final hq = await _apiService.getActiveHeadquarters();
+      _locationService.updateHeadquarters(
+        name: hq.name,
+        lat: hq.latitude,
+        lon: hq.longitude,
+        radius: hq.radiusMeters,
+      );
+    } catch (e) {
+      debugPrint('Note: /headquarters/active fetch error: $e');
+    }
+
+    // 5. Fetch personal attendance records
+    try {
+      final visits = await _apiService.getMyAttendance();
+      if (mounted) {
+        setState(() => _todayVisits = visits);
+      }
+    } catch (e) {
+      debugPrint('Note: attendance fetch error: $e');
+    }
+
+    // 6. Check queued offline items
+    try {
+      final queued = await _queueService.getQueuedCount();
+      if (mounted) {
+        setState(() => _queuedCount = queued);
+      }
+    } catch (_) {}
+
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
+
+    // Initialize location service
+    await _locationService.initialize();
   }
 
   Future<void> _refreshData() async {
+    // Refresh user profile
+    try {
+      final user = await _apiService.getMe();
+      if (mounted) setState(() => _user = user);
+    } catch (_) {}
+
+    // Refresh active headquarters (e.g., changed on admin website)
+    try {
+      final hq = await _apiService.getActiveHeadquarters();
+      _locationService.updateHeadquarters(
+        name: hq.name,
+        lat: hq.latitude,
+        lon: hq.longitude,
+        radius: hq.radiusMeters,
+      );
+    } catch (_) {}
+
+    // Refresh attendance & queue
     try {
       final visits = await _apiService.getMyAttendance();
       final queued = await _queueService.getQueuedCount();
-      setState(() {
-        _todayVisits = visits;
-        _queuedCount = queued;
-      });
+      if (mounted) {
+        setState(() {
+          _todayVisits = visits;
+          _queuedCount = queued;
+        });
+      }
     } catch (_) {}
   }
 
@@ -133,16 +199,16 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            profile?.fullName ?? _user?.username ?? 'Officer',
+                            (profile?.fullName.isNotEmpty ?? false) ? profile!.fullName : (_user?.username ?? 'Officer'),
                             style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: AppTheme.textMain),
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            '${profile?.rank ?? "Constable"} • ${profile?.officerId ?? _user?.username ?? ""}',
+                            '${(profile?.rank.isNotEmpty ?? false) ? profile!.rank : "Constable"} • ${(profile?.officerId.isNotEmpty ?? false) ? profile!.officerId : (_user?.username ?? "")}',
                             style: const TextStyle(color: AppTheme.policeBlue, fontSize: 13, fontWeight: FontWeight.w600),
                           ),
                           Text(
-                            profile?.department ?? 'Eluru Police Division',
+                            (profile?.department.isNotEmpty ?? false) ? profile!.department : _locationService.hqName,
                             style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
                           ),
                         ],
@@ -220,8 +286,8 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   const SizedBox(height: 12),
                   Text(
                     isInside
-                        ? 'Reporting inside Eluru HQ Geofence (Radius ${AppConstants.defaultGeofenceRadius.toInt()}m). Active visit recorded.'
-                        : 'Distance to Eluru HQ: ${dist > 1000 ? "${(dist / 1000).toStringAsFixed(1)} km" : "${dist.toStringAsFixed(0)} m"}.',
+                        ? 'Reporting inside ${_locationService.hqName} (Radius ${_locationService.hqRadius.toInt()}m). Active visit recorded.'
+                        : 'Distance to ${_locationService.hqName}: ${dist > 1000 ? "${(dist / 1000).toStringAsFixed(1)} km" : "${dist.toStringAsFixed(0)} m"}.',
                     style: const TextStyle(color: AppTheme.textMain, fontSize: 13, height: 1.3),
                   ),
                   const SizedBox(height: 8),
@@ -408,7 +474,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
           children: [
             const Text('PoliceHQ GeoAttend', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Colors.white)),
             Text(
-              AppConstants.hqName,
+              _locationService.hqName,
               style: const TextStyle(fontSize: 11, color: Color(0xFFCBD5E1), fontWeight: FontWeight.normal),
             ),
           ],

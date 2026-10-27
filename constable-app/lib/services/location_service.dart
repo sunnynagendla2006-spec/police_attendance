@@ -36,6 +36,11 @@ class LocationTrackingService extends ChangeNotifier {
   double _distanceToHQ = 0.0;
   bool _isInsideGeofence = false;
 
+  String _hqName = AppConstants.hqName;
+  double _hqLatitude = AppConstants.hqLatitude;
+  double _hqLongitude = AppConstants.hqLongitude;
+  double _hqRadius = AppConstants.defaultGeofenceRadius;
+
   bool get isTracking => _isTracking;
   TrackingState get state => _state;
   Position? get lastPosition => _lastPosition;
@@ -43,8 +48,38 @@ class LocationTrackingService extends ChangeNotifier {
   String get statusMessage => _statusMessage;
   double get distanceToHQ => _distanceToHQ;
   bool get isInsideGeofence => _isInsideGeofence;
+  String get hqName => _hqName;
+  double get hqLatitude => _hqLatitude;
+  double get hqLongitude => _hqLongitude;
+  double get hqRadius => _hqRadius;
+
+  void updateHeadquarters({required String name, required double lat, required double lon, required double radius}) {
+    _hqName = name;
+    _hqLatitude = lat;
+    _hqLongitude = lon;
+    _hqRadius = radius;
+    if (_lastPosition != null) {
+      _distanceToHQ = Geolocator.distanceBetween(
+        _lastPosition!.latitude,
+        _lastPosition!.longitude,
+        _hqLatitude,
+        _hqLongitude,
+      );
+      _isInsideGeofence = _distanceToHQ <= _hqRadius;
+      _state = _isInsideGeofence ? TrackingState.inside : TrackingState.outside;
+    }
+    notifyListeners();
+  }
 
   Future<void> initialize() async {
+    final cachedHq = await _apiService.getCachedHeadquarters();
+    if (cachedHq != null) {
+      _hqName = cachedHq.name;
+      _hqLatitude = cachedHq.latitude;
+      _hqLongitude = cachedHq.longitude;
+      _hqRadius = cachedHq.radiusMeters;
+    }
+
     final prefs = await SharedPreferences.getInstance();
     final shouldTrack = prefs.getBool(AppConstants.keyTrackingActive) ?? false;
     if (shouldTrack) {
@@ -151,16 +186,16 @@ class LocationTrackingService extends ChangeNotifier {
     _lastPosition = position;
     _lastUpdateTime = DateTime.now();
 
-    // Calculate distance to Eluru District Police Headquarters
+    // Calculate distance to active operational Headquarters
     _distanceToHQ = Geolocator.distanceBetween(
       position.latitude,
       position.longitude,
-      AppConstants.hqLatitude,
-      AppConstants.hqLongitude,
+      _hqLatitude,
+      _hqLongitude,
     );
 
     // Rough client-side estimation (authoritative logic is on the FastAPI backend)
-    _isInsideGeofence = _distanceToHQ <= AppConstants.defaultGeofenceRadius;
+    _isInsideGeofence = _distanceToHQ <= _hqRadius;
     _state = _isInsideGeofence ? TrackingState.inside : TrackingState.outside;
 
     final obs = LocationObservationModel(

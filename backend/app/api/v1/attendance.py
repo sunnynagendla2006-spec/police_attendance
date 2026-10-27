@@ -25,12 +25,14 @@ async def get_attendance_visits(
     end_date: Optional[datetime] = Query(None),
     limit: int = Query(200, ge=1, le=500),
     skip: int = Query(0, ge=0),
-    current_user: Dict[str, Any] = Depends(require_roles(["super_admin", "hq_admin"])),
+    current_user: Dict[str, Any] = Depends(get_current_user),
     db: AsyncIOMotorDatabase = Depends(get_database)
 ):
     """Retrieve headquarters visit records with filtering and pagination."""
     query: Dict[str, Any] = {}
-    if officer_id:
+    if current_user.get("role") == "constable":
+        query["user_id"] = str(current_user["_id"])
+    elif officer_id:
         query["officer_id"] = officer_id
     if status_filter:
         query["visit_status"] = status_filter

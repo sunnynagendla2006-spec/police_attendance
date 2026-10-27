@@ -30,6 +30,27 @@ from app.services.auth_service import (
 )
 from app.services.audit_service import record_audit_log
 
+async def _get_profile_brief(db: AsyncIOMotorDatabase, user_id: str, username: str):
+    profile_doc = await db.officer_profiles.find_one({"user_id": user_id})
+    if not profile_doc and ObjectId.is_valid(user_id):
+        profile_doc = await db.officer_profiles.find_one({"user_id": ObjectId(user_id)})
+    if not profile_doc:
+        profile_doc = await db.officer_profiles.find_one({
+            "$or": [
+                {"officer_id": {"$regex": f"^{username.strip()}$", "$options": "i"}},
+                {"mobile_number": username.strip()}
+            ]
+        })
+    if profile_doc:
+        return OfficerProfileBrief(
+            officer_id=profile_doc.get("officer_id", ""),
+            full_name=profile_doc.get("full_name", ""),
+            rank=profile_doc.get("rank", ""),
+            department=profile_doc.get("department", ""),
+            mobile_number=profile_doc.get("mobile_number", "")
+        )
+    return None
+
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 @router.post("/login", response_model=TokenResponse)
@@ -41,16 +62,7 @@ async def login(req: LoginRequest, db: AsyncIOMotorDatabase = Depends(get_databa
     must_change = user.get("must_change_password", False)
 
     # Fetch profile if exists
-    profile_doc = await db.officer_profiles.find_one({"user_id": user_id})
-    profile_brief = None
-    if profile_doc:
-        profile_brief = OfficerProfileBrief(
-            officer_id=profile_doc.get("officer_id", ""),
-            full_name=profile_doc.get("full_name", ""),
-            rank=profile_doc.get("rank", ""),
-            department=profile_doc.get("department", ""),
-            mobile_number=profile_doc.get("mobile_number", "")
-        )
+    profile_brief = await _get_profile_brief(db, user_id, user.get("username", ""))
 
     token_data = {
         "sub": user_id,
@@ -173,16 +185,7 @@ async def get_me(
 ):
     """Get current authenticated user profile."""
     user_id = str(current_user["_id"])
-    profile_doc = await db.officer_profiles.find_one({"user_id": user_id})
-    profile_brief = None
-    if profile_doc:
-        profile_brief = OfficerProfileBrief(
-            officer_id=profile_doc.get("officer_id", ""),
-            full_name=profile_doc.get("full_name", ""),
-            rank=profile_doc.get("rank", ""),
-            department=profile_doc.get("department", ""),
-            mobile_number=profile_doc.get("mobile_number", "")
-        )
+    profile_brief = await _get_profile_brief(db, user_id, current_user.get("username", ""))
 
     return UserResponse(
         id=user_id,

@@ -1,4 +1,4 @@
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from app.core.database import get_database
@@ -18,6 +18,20 @@ from app.services.geofence_engine import get_active_geofence_config
 
 router = APIRouter(prefix="/location", tags=["Location & Geofence Tracking"])
 
+async def _find_profile_for_user(db: AsyncIOMotorDatabase, current_user: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    user_id = str(current_user["_id"])
+    profile = await db.officer_profiles.find_one({"user_id": user_id})
+    if not profile and ObjectId.is_valid(user_id):
+        profile = await db.officer_profiles.find_one({"user_id": ObjectId(user_id)})
+    if not profile:
+        profile = await db.officer_profiles.find_one({
+            "$or": [
+                {"officer_id": {"$regex": f"^{current_user.get('username', '').strip()}$", "$options": "i"}},
+                {"mobile_number": current_user.get('username', '').strip()}
+            ]
+        })
+    return profile
+
 @router.post("/observations", response_model=LocationObservationResult)
 async def submit_location(
     obs: LocationObservationCreate,
@@ -28,8 +42,7 @@ async def submit_location(
     Submit a location observation from an authorized officer's device.
     Evaluates headquarters geofence and triggers verified entry/exit transitions.
     """
-    user_id = str(current_user["_id"])
-    profile = await db.officer_profiles.find_one({"user_id": user_id})
+    profile = await _find_profile_for_user(db, current_user)
     if not profile:
         raise HTTPException(status_code=404, detail="Officer profile not found")
 
@@ -51,8 +64,7 @@ async def sync_offline_locations(
     Synchronize a batch of locally queued offline observations.
     Preserves original timestamps and prevents duplicate visit creation.
     """
-    user_id = str(current_user["_id"])
-    profile = await db.officer_profiles.find_one({"user_id": user_id})
+    profile = await _find_profile_for_user(db, current_user)
     if not profile:
         raise HTTPException(status_code=404, detail="Officer profile not found")
 

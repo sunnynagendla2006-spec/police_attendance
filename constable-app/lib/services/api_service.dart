@@ -5,6 +5,7 @@ import '../core/constants.dart';
 import '../models/user_model.dart';
 import '../models/attendance_model.dart';
 import '../models/location_observation.dart';
+import '../models/headquarters_model.dart';
 
 class ApiService {
   static final ApiService _instance = ApiService._internal();
@@ -14,17 +15,35 @@ class ApiService {
   String? _cachedToken;
   String? _customBaseUrl;
 
+  static String normalizeUrl(String raw) {
+    var url = raw.trim();
+    while (url.endsWith('/')) {
+      url = url.substring(0, url.length - 1);
+    }
+    if (!url.endsWith('/api/v1')) {
+      url = '$url/api/v1';
+    }
+    return url;
+  }
+
   Future<String> get baseUrl async {
-    if (_customBaseUrl != null) return _customBaseUrl!;
+    if (_customBaseUrl != null) return normalizeUrl(_customBaseUrl!);
     final prefs = await SharedPreferences.getInstance();
-    _customBaseUrl = prefs.getString(AppConstants.keyCustomBaseUrl) ?? AppConstants.defaultBaseUrl;
-    return _customBaseUrl!;
+    final saved = prefs.getString(AppConstants.keyCustomBaseUrl);
+    // Automatically upgrade legacy localhost defaults to the current cloud production default
+    if (saved == null || saved.contains('127.0.0.1')) {
+      _customBaseUrl = AppConstants.defaultBaseUrl;
+    } else {
+      _customBaseUrl = saved;
+    }
+    return normalizeUrl(_customBaseUrl!);
   }
 
   Future<void> setBaseUrl(String newUrl) async {
-    _customBaseUrl = newUrl;
+    final normalized = normalizeUrl(newUrl);
+    _customBaseUrl = normalized;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(AppConstants.keyCustomBaseUrl, newUrl);
+    await prefs.setString(AppConstants.keyCustomBaseUrl, normalized);
   }
 
   Future<String?> getToken() async {
@@ -39,6 +58,57 @@ class ApiService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(AppConstants.keyToken, auth.accessToken);
     await prefs.setString(AppConstants.keyUser, jsonEncode(auth.user.toJson()));
+  }
+
+  Future<UserModel?> getCachedUser() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userJson = prefs.getString(AppConstants.keyUser);
+      if (userJson != null) {
+        return UserModel.fromJson(jsonDecode(userJson));
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<HeadquartersModel?> getCachedHeadquarters() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final hqJson = prefs.getString(AppConstants.keyHeadquarters);
+      if (hqJson != null) {
+        return HeadquartersModel.fromJson(jsonDecode(hqJson));
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<HeadquartersModel> getActiveHeadquarters() async {
+    try {
+      final url = Uri.parse('${await baseUrl}/headquarters/active');
+      final response = await http.get(url, headers: await _headers(needsAuth: true));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final hq = HeadquartersModel.fromJson(data);
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(AppConstants.keyHeadquarters, jsonEncode(hq.toJson()));
+        return hq;
+      }
+    } catch (_) {}
+
+    // Fallback: check cached or default
+    final cached = await getCachedHeadquarters();
+    if (cached != null) return cached;
+    return HeadquartersModel(
+      id: 'default',
+      name: AppConstants.hqName,
+      address: '',
+      latitude: AppConstants.hqLatitude,
+      longitude: AppConstants.hqLongitude,
+      radiusMeters: AppConstants.defaultGeofenceRadius,
+      status: 'ACTIVE',
+      isPrimary: true,
+    );
   }
 
   Future<void> clearAuth() async {
@@ -162,20 +232,39 @@ class ApiService {
 
   // 6. Get Attendance Visits
   Future<List<AttendanceVisitModel>> getMyAttendance({String? date, String? startDate, String? endDate}) async {
-    var queryParams = <String, String>{};
-    if (date != null) queryParams['date'] = date;
-    if (startDate != null) queryParams['start_date'] = startDate;
-    if (endDate != null) queryParams['end_date'] = endDate;
+    try {
+      var queryParams = <String, String>{};
+      if (date != null) queryParams['date'] = date;
+      if (startDate != null) queryParams['start_date'] = startDate;
+      if (endDate != null) queryParams['end_date'] = endDate;
 
-    final uri = Uri.parse('${await baseUrl}/attendance').replace(queryParameters: queryParams.isNotEmpty ? queryParams : null);
-    final response = await http.get(uri, headers: await _headers(needsAuth: true));
+      final uri = Uri.parse('${await baseUrl}/attendance').replace(queryParameters: queryParams.isNotEmpty ? queryParams : null);
+      var response = await http.get(uri, headers: await _headers(needsAuth: true));
 
-    if (response.statusCode == 200) {
-      final List<dynamic> list = jsonDecode(response.body);
-      return list.map((item) => AttendanceVisitModel.fromJson(item)).toList();
-    } else {
-      throw Exception('Failed to load attendance records');
-    }
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        if (decoded is List) {
+          return decoded.map((item) => AttendanceVisitModel.fromJson(item)).toList();
+        } else if (decoded is Map && decoded['history'] is List) {
+          final List<dynamic> list = decoded['history'];
+          return list.map((item) => AttendanceVisitModel.fromJson(item)).toList();
+        }
+      }
+
+      // Fallback to /attendance/my-attendance
+      final myUri = Uri.parse('${await baseUrl}/attendance/my-attendance');
+      response = await http.get(myUri, headers: await _headers(needsAuth: true));
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map && decoded['history'] is List) {
+          final List<dynamic> list = decoded['history'];
+          return list.map((item) => AttendanceVisitModel.fromJson(item)).toList();
+        } else if (decoded is List) {
+          return decoded.map((item) => AttendanceVisitModel.fromJson(item)).toList();
+        }
+      }
+    } catch (_) {}
+    return [];
   }
 
   // 7. Submit Attendance Correction Request

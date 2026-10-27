@@ -4,9 +4,46 @@ import '../models/user_model.dart';
 import '../services/api_service.dart';
 import 'login_screen.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   final UserModel? user;
   const ProfileScreen({super.key, this.user});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  UserModel? _user;
+
+  @override
+  void initState() {
+    super.initState();
+    _user = widget.user;
+    _loadUser();
+  }
+
+  @override
+  void didUpdateWidget(covariant ProfileScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.user != null && widget.user != _user) {
+      setState(() => _user = widget.user);
+    }
+  }
+
+  Future<void> _loadUser() async {
+    if (_user == null || _user?.profile == null) {
+      final cached = await ApiService().getCachedUser();
+      if (cached != null && mounted) {
+        setState(() => _user = cached);
+      }
+      try {
+        final fresh = await ApiService().getMe();
+        if (mounted) {
+          setState(() => _user = fresh);
+        }
+      } catch (_) {}
+    }
+  }
 
   void _showCorrectionDialog(BuildContext context) {
     final reasonController = TextEditingController();
@@ -23,7 +60,7 @@ class ProfileScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Report a missed check-in, device battery depletion, or incorrect visit entry to Eluru HQ administration.',
+                'Report a missed check-in, device battery depletion, or incorrect visit entry to HQ administration.',
                 style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
               ),
               const SizedBox(height: 12),
@@ -143,6 +180,7 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final user = _user ?? widget.user;
     final profile = user?.profile;
 
     return SingleChildScrollView(
@@ -156,14 +194,14 @@ class ProfileScreen extends StatelessWidget {
               padding: const EdgeInsets.all(20.0),
               child: Column(
                 children: [
-                  CircleAvatar(
+                  const CircleAvatar(
                     radius: 36,
                     backgroundColor: AppTheme.policeNavy,
-                    child: const Icon(Icons.shield, size: 40, color: Colors.white),
+                    child: Icon(Icons.shield, size: 40, color: Colors.white),
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    profile?.fullName ?? user?.username ?? 'Officer',
+                    (profile?.fullName.isNotEmpty ?? false) ? profile!.fullName : (user?.username ?? 'Officer'),
                     style: const TextStyle(color: AppTheme.textMain, fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 6),
@@ -175,7 +213,7 @@ class ProfileScreen extends StatelessWidget {
                       border: Border.all(color: AppTheme.policeNavy.withOpacity(0.2)),
                     ),
                     child: Text(
-                      '${profile?.rank ?? "Constable"} • ${profile?.officerId ?? user?.username ?? ""}',
+                      '${(profile?.rank.isNotEmpty ?? false) ? profile!.rank : "Constable"} • ${(profile?.officerId.isNotEmpty ?? false) ? profile!.officerId : (user?.username ?? "")}',
                       style: const TextStyle(color: AppTheme.policeNavy, fontWeight: FontWeight.bold, fontSize: 12),
                     ),
                   ),
@@ -194,11 +232,11 @@ class ProfileScreen extends StatelessWidget {
                 children: [
                   const Text('Personnel Details', style: TextStyle(color: AppTheme.textMain, fontWeight: FontWeight.bold, fontSize: 14)),
                   const Divider(color: AppTheme.borderLight, height: 20),
-                  _buildInfoTile('Username', user?.username ?? '—', Icons.account_circle_outlined),
-                  _buildInfoTile('Officer ID', profile?.officerId ?? '—', Icons.badge_outlined),
-                  _buildInfoTile('Department', profile?.department ?? 'Eluru Division', Icons.domain),
-                  _buildInfoTile('Mobile Number', profile?.mobileNumber ?? '—', Icons.phone_outlined),
-                  _buildInfoTile('Account Status', user?.accountStatus.toUpperCase() ?? 'ACTIVE', Icons.verified_user_outlined),
+                  _buildInfoTile('Username', (user?.username.isNotEmpty ?? false) ? user!.username : '—', Icons.account_circle_outlined),
+                  _buildInfoTile('Officer ID', (profile?.officerId.isNotEmpty ?? false) ? profile!.officerId : '—', Icons.badge_outlined),
+                  _buildInfoTile('Department', (profile?.department.isNotEmpty ?? false) ? profile!.department : 'Police Division', Icons.domain),
+                  _buildInfoTile('Mobile Number', (profile?.mobileNumber.isNotEmpty ?? false) ? profile!.mobileNumber : '—', Icons.phone_outlined),
+                  _buildInfoTile('Account Status', (user?.accountStatus.isNotEmpty ?? false) ? user!.accountStatus.toUpperCase() : 'ACTIVE', Icons.verified_user_outlined),
                 ],
               ),
             ),

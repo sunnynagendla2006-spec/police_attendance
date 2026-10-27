@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/theme.dart';
 import '../services/api_service.dart';
-import 'change_password_screen.dart';
 import 'home_dashboard_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -30,7 +29,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final token = await _apiService.getToken();
     if (token != null) {
       try {
-        final user = await _apiService.getMe();
+        await _apiService.getMe();
         if (mounted) {
           Navigator.pushReplacement(
             context,
@@ -106,6 +105,11 @@ class _LoginScreenState extends State<LoginScreen> {
               runSpacing: 6,
               children: [
                 ActionChip(
+                  avatar: const Icon(Icons.cloud_done, size: 14, color: AppTheme.policeGold),
+                  label: const Text('Render Cloud', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                  onPressed: () => controller.text = 'https://police-attendance.onrender.com/api/v1',
+                ),
+                ActionChip(
                   label: const Text('USB Cable', style: TextStyle(fontSize: 11)),
                   onPressed: () => controller.text = 'http://127.0.0.1:8000/api/v1',
                 ),
@@ -125,7 +129,7 @@ class _LoginScreenState extends State<LoginScreen> {
               style: const TextStyle(color: AppTheme.textMain, fontSize: 13),
               decoration: const InputDecoration(
                 labelText: 'Base URL',
-                hintText: 'http://127.0.0.1:8000/api/v1',
+                hintText: 'https://police-attendance.onrender.com/api/v1',
               ),
             ),
           ],
