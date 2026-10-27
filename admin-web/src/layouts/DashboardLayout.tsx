@@ -122,28 +122,113 @@ export const DashboardLayout: React.FC<Props> = ({
     };
   }, []);
 
-  const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, category: 'Operations' },
-    { id: 'live-map', label: 'Live Location Map', icon: MapPin, category: 'Operations' },
-    { id: 'duty-assignments', label: 'Duty Assignments', icon: Building, category: 'Operations' },
-    { id: 'outside-geofence', label: 'Outside-Geofence Audit', icon: ShieldAlert, category: 'Operations' },
-    { id: 'police-personnel', label: 'Police Personnel', icon: Users, category: 'Personnel' },
-    { id: 'registered-devices', label: 'Device Binding', icon: Smartphone, category: 'Personnel' },
-    { id: 'app-usage', label: 'App Usage Summaries', icon: Smartphone, category: 'Personnel' },
-    { id: 'attendance', label: 'Daily Attendance', icon: CalendarCheck, category: 'Attendance' },
-    { id: 'station-visits', label: 'Station Visits', icon: History, category: 'Attendance' },
-    { id: 'attendance-history', label: 'Attendance History', icon: FileText, category: 'Attendance' },
-    { id: 'scheduled-reports', label: 'Scheduled Daily Reports', icon: FileCheck2, category: 'Reports' },
-    { id: 'report-downloads', label: 'Report Downloads (12)', icon: Download, category: 'Reports' },
-    { id: 'reports', label: 'Reports & Analytics', icon: BarChart3, category: 'Analytics' },
-    { id: 'headquarters-settings', label: 'Headquarters & Geofences', icon: ShieldCheck, category: 'System' },
-    { id: 'notifications-alerts', label: 'Notifications / Alerts', icon: Bell, category: 'System', badge: notifications.length > 0 ? notifications.length : undefined },
-    { id: 'user-management', label: 'User Management', icon: UserCog, category: 'Administration' },
-    { id: 'system-settings', label: 'System Settings', icon: Settings, category: 'Administration' }
+  interface NavSubItem {
+    id: string;
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+    badge?: number | string;
+  }
+
+  interface NavCategory {
+    id: string;
+    title: string;
+    icon: React.ComponentType<{ className?: string }>;
+    badge?: number | string;
+    items: NavSubItem[];
+  }
+
+  const navCategories: NavCategory[] = [
+    {
+      id: 'operations',
+      title: 'Operations & Maps',
+      icon: MapPin,
+      items: [
+        { id: 'live-map', label: 'Live Location Map', icon: MapPin },
+        { id: 'duty-assignments', label: 'Duty Assignments', icon: Building },
+        { id: 'outside-geofence', label: 'Outside-Geofence Audit', icon: ShieldAlert },
+      ]
+    },
+    {
+      id: 'personnel',
+      title: 'Force & Personnel',
+      icon: Users,
+      items: [
+        { id: 'police-personnel', label: 'Police Personnel', icon: Users },
+        { id: 'registered-devices', label: 'Device Binding', icon: Smartphone },
+        { id: 'app-usage', label: 'App Usage Summaries', icon: Smartphone },
+      ]
+    },
+    {
+      id: 'attendance',
+      title: 'Attendance & Visits',
+      icon: CalendarCheck,
+      items: [
+        { id: 'attendance', label: 'Daily Attendance', icon: CalendarCheck },
+        { id: 'station-visits', label: 'Station Visits', icon: History },
+        { id: 'attendance-history', label: 'Attendance History', icon: FileText },
+      ]
+    },
+    {
+      id: 'reports',
+      title: 'Reports & Records',
+      icon: BarChart3,
+      items: [
+        { id: 'reports', label: 'Reports & Analytics', icon: BarChart3 },
+        { id: 'scheduled-reports', label: 'Scheduled Daily Reports', icon: FileCheck2 },
+        { id: 'report-downloads', label: 'Report Downloads (12)', icon: Download },
+      ]
+    },
+    {
+      id: 'admin',
+      title: 'HQ Administration',
+      icon: ShieldCheck,
+      badge: notifications.length > 0 ? notifications.length : undefined,
+      items: [
+        { id: 'headquarters-settings', label: 'Headquarters & Geofences', icon: ShieldCheck },
+        { id: 'notifications-alerts', label: 'Notifications / Alerts', icon: Bell, badge: notifications.length > 0 ? notifications.length : undefined },
+        { id: 'user-management', label: 'User Management', icon: UserCog },
+        { id: 'system-settings', label: 'System Settings', icon: Settings },
+      ]
+    }
   ];
 
+  // Flat list for breadcrumbs
+  const flatNavItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, category: 'Command Center' },
+    ...navCategories.flatMap(cat => cat.items.map(sub => ({ ...sub, category: cat.title })))
+  ];
+
+  // Accordion open/close state for categories
+  const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({
+    operations: true,
+    personnel: true,
+    attendance: false,
+    reports: false,
+    admin: false
+  });
+
+  // Auto-expand category containing current active tab
+  useEffect(() => {
+    const parentCat = navCategories.find(cat =>
+      cat.items.some(item =>
+        item.id === currentTab ||
+        (item.id === 'headquarters-settings' && (currentTab === 'geofence-settings' || currentTab === 'admin/headquarters-settings'))
+      )
+    );
+    if (parentCat) {
+      setOpenCategories(prev => ({ ...prev, [parentCat.id]: true }));
+    }
+  }, [currentTab]);
+
+  const toggleCategory = (catId: string) => {
+    setOpenCategories(prev => ({
+      ...prev,
+      [catId]: !prev[catId]
+    }));
+  };
+
   const getPageTitleAndBreadcrumb = () => {
-    const item = navItems.find(n => n.id === currentTab);
+    const item = flatNavItems.find(n => n.id === currentTab);
     return {
       title: item ? item.label : 'Headquarters Overview',
       category: item ? item.category : 'Police Management'
@@ -201,49 +286,189 @@ export const DashboardLayout: React.FC<Props> = ({
           </button>
         </div>
 
-        {/* Navigation Items */}
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          {navItems.map((item, idx) => {
-            const Icon = item.icon;
-            const isActive = currentTab === item.id || (item.id === 'headquarters-settings' && (currentTab === 'geofence-settings' || currentTab === 'admin/headquarters-settings'));
-            return (
-              <button
-                key={item.id}
-                onClick={() => {
-                  setCurrentTab(item.id);
-                  setIsMobileMenuOpen(false);
-                }}
-                title={isCollapsed ? item.label : undefined}
-                className={`w-full flex items-center ${
-                  isCollapsed ? 'justify-center px-2' : 'justify-between px-3'
-                } py-2.5 rounded-lg text-xs font-semibold transition-all group relative ${
-                  isActive
-                    ? 'bg-[#EBF2FA] text-[#17365D] shadow-sm font-bold'
-                    : 'text-[#64748B] hover:text-[#17365D] hover:bg-slate-50'
+        {/* Navigation Items (Categorized with Submenus) */}
+        <nav className="flex-1 px-3 py-3 space-y-2 overflow-y-auto">
+          {/* Top-Level Dashboard Link */}
+          <button
+            onClick={() => {
+              setCurrentTab('dashboard');
+              setIsMobileMenuOpen(false);
+            }}
+            title={isCollapsed ? 'Dashboard' : undefined}
+            className={`w-full flex items-center ${
+              isCollapsed ? 'justify-center px-2' : 'justify-between px-3'
+            } py-2.5 rounded-lg text-xs font-semibold transition-all group relative ${
+              currentTab === 'dashboard' || currentTab === 'overview'
+                ? 'bg-[#EBF2FA] text-[#17365D] shadow-sm font-bold'
+                : 'text-[#64748B] hover:text-[#17365D] hover:bg-slate-50'
+            }`}
+          >
+            <div className="flex items-center space-x-3">
+              <LayoutDashboard
+                className={`w-4 h-4 shrink-0 transition-colors ${
+                  currentTab === 'dashboard' || currentTab === 'overview'
+                    ? 'text-[#17365D]'
+                    : 'text-slate-400 group-hover:text-[#17365D]'
                 }`}
-              >
-                <div className="flex items-center space-x-3">
-                  <Icon
-                    className={`w-4 h-4 shrink-0 transition-colors ${
-                      isActive ? 'text-[#17365D]' : 'text-slate-400 group-hover:text-[#17365D]'
+              />
+              {!isCollapsed && <span>Dashboard</span>}
+            </div>
+
+            {/* Collapsed Hover Tooltip */}
+            {isCollapsed && (
+              <div className="hidden group-hover:block absolute left-full ml-2 px-2.5 py-1 bg-[#17365D] text-white text-[11px] font-medium rounded-md shadow-lg whitespace-nowrap z-50 pointer-events-none">
+                Dashboard
+              </div>
+            )}
+          </button>
+
+          <div className="border-t border-slate-100 my-1" />
+
+          {/* Categorized Submenu Sections */}
+          {navCategories.map((cat) => {
+            const CatIcon = cat.icon;
+            const isCatOpen = !!openCategories[cat.id];
+            const hasActiveChild = cat.items.some(
+              item =>
+                item.id === currentTab ||
+                (item.id === 'headquarters-settings' &&
+                  (currentTab === 'geofence-settings' || currentTab === 'admin/headquarters-settings'))
+            );
+
+            // Collapsed Mode Rendering (with interactive flyout)
+            if (isCollapsed) {
+              return (
+                <div key={cat.id} className="relative group">
+                  <button
+                    type="button"
+                    title={cat.title}
+                    className={`w-full flex items-center justify-center p-2.5 rounded-lg transition-all ${
+                      hasActiveChild
+                        ? 'bg-[#EBF2FA] text-[#17365D]'
+                        : 'text-slate-500 hover:text-[#17365D] hover:bg-slate-50'
                     }`}
-                  />
-                  {!isCollapsed && <span className="truncate">{item.label}</span>}
+                  >
+                    <CatIcon className={`w-4 h-4 ${hasActiveChild ? 'text-[#17365D]' : 'text-slate-400'}`} />
+                  </button>
+
+                  {/* Flyout Submenu on Hover in Collapsed Mode */}
+                  <div className="hidden group-hover:block absolute left-full top-0 ml-2 w-56 bg-white border border-[#E2E8F0] rounded-xl shadow-xl py-2 z-50">
+                    <div className="px-3 py-1.5 border-b border-slate-100 text-[11px] font-bold text-[#17365D] uppercase tracking-wider flex items-center space-x-2">
+                      <CatIcon className="w-3.5 h-3.5 text-[#2563EB]" />
+                      <span>{cat.title}</span>
+                    </div>
+                    <div className="p-1 space-y-0.5">
+                      {cat.items.map((subItem) => {
+                        const SubIcon = subItem.icon;
+                        const isSubActive =
+                          currentTab === subItem.id ||
+                          (subItem.id === 'headquarters-settings' &&
+                            (currentTab === 'geofence-settings' || currentTab === 'admin/headquarters-settings'));
+                        return (
+                          <button
+                            key={subItem.id}
+                            onClick={() => {
+                              setCurrentTab(subItem.id);
+                            }}
+                            className={`w-full text-left px-2.5 py-1.5 text-xs rounded-md transition flex items-center justify-between font-medium ${
+                              isSubActive
+                                ? 'bg-[#EBF2FA] text-[#17365D] font-bold'
+                                : 'text-slate-600 hover:text-[#17365D] hover:bg-slate-50'
+                            }`}
+                          >
+                            <div className="flex items-center space-x-2 truncate">
+                              <SubIcon className={`w-3.5 h-3.5 shrink-0 ${isSubActive ? 'text-[#17365D]' : 'text-slate-400'}`} />
+                              <span className="truncate">{subItem.label}</span>
+                            </div>
+                            {subItem.badge && (
+                              <span className="px-1.5 py-0.2 text-[9px] font-bold rounded-full bg-amber-100 text-amber-800">
+                                {subItem.badge}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
+              );
+            }
 
-                {!isCollapsed && item.badge && (
-                  <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
-                    {item.badge}
-                  </span>
-                )}
+            // Expanded Mode: Accordion Category with Submenu
+            return (
+              <div key={cat.id} className="space-y-1">
+                <button
+                  type="button"
+                  onClick={() => toggleCategory(cat.id)}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold transition-all select-none ${
+                    hasActiveChild
+                      ? 'text-[#17365D] bg-slate-50/80 font-bold'
+                      : 'text-slate-600 hover:text-[#17365D] hover:bg-slate-50/60'
+                  }`}
+                >
+                  <div className="flex items-center space-x-2.5">
+                    <CatIcon className={`w-4 h-4 shrink-0 ${hasActiveChild ? 'text-[#2563EB]' : 'text-slate-400'}`} />
+                    <span className="truncate tracking-tight">{cat.title}</span>
+                  </div>
+                  <div className="flex items-center space-x-1.5">
+                    {cat.badge && (
+                      <span className="px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-amber-100 text-amber-800">
+                        {cat.badge}
+                      </span>
+                    )}
+                    {isCatOpen ? (
+                      <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                    ) : (
+                      <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                    )}
+                  </div>
+                </button>
 
-                {/* Collapsed Hover Tooltip */}
-                {isCollapsed && (
-                  <div className="hidden group-hover:block absolute left-full ml-2 px-2.5 py-1 bg-[#17365D] text-white text-[11px] font-medium rounded-md shadow-lg whitespace-nowrap z-50 pointer-events-none">
-                    {item.label}
+                {/* Submenu Items */}
+                {isCatOpen && (
+                  <div className="pl-3 pr-1 space-y-0.5 border-l-2 border-slate-100 ml-5 my-1">
+                    {cat.items.map((subItem) => {
+                      const SubIcon = subItem.icon;
+                      const isSubActive =
+                        currentTab === subItem.id ||
+                        (subItem.id === 'headquarters-settings' &&
+                          (currentTab === 'geofence-settings' || currentTab === 'admin/headquarters-settings'));
+
+                      return (
+                        <button
+                          key={subItem.id}
+                          onClick={() => {
+                            setCurrentTab(subItem.id);
+                            setIsMobileMenuOpen(false);
+                          }}
+                          className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all group ${
+                            isSubActive
+                              ? 'bg-[#EBF2FA] text-[#17365D] font-bold shadow-xs'
+                              : 'text-[#64748B] hover:text-[#17365D] hover:bg-slate-50'
+                          }`}
+                        >
+                          <div className="flex items-center space-x-2.5 truncate">
+                            <SubIcon
+                              className={`w-3.5 h-3.5 shrink-0 ${
+                                isSubActive
+                                  ? 'text-[#17365D]'
+                                  : 'text-slate-400 group-hover:text-[#17365D]'
+                              }`}
+                            />
+                            <span className="truncate">{subItem.label}</span>
+                          </div>
+
+                          {subItem.badge && (
+                            <span className="px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                              {subItem.badge}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
-              </button>
+              </div>
             );
           })}
         </nav>
