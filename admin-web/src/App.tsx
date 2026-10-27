@@ -16,6 +16,12 @@ import { SystemHealth } from './pages/SystemHealth';
 import { AccountSecurity } from './pages/AccountSecurity';
 import { NotificationsAlerts } from './pages/NotificationsAlerts';
 import { UserManagement } from './pages/UserManagement';
+import { DutyAssignments } from './pages/DutyAssignments';
+import { OutsideGeofenceReports } from './pages/OutsideGeofenceReports';
+import { ScheduledReports } from './pages/ScheduledReports';
+import { ReportDownloads } from './pages/ReportDownloads';
+import { DeviceManagement } from './pages/DeviceManagement';
+import { AppUsageSummaryPage } from './pages/AppUsageSummary';
 
 export const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(api.getCurrentUser());
@@ -63,9 +69,17 @@ export const App: React.FC = () => {
         return <Overview onNavigate={(tab) => setCurrentTab(tab)} />;
       case 'live-map':
         return <LiveMap targetOfficerId={selectedMapOfficerId} />;
+      case 'duty-assignments':
+        return <DutyAssignments />;
+      case 'outside-geofence':
+        return <OutsideGeofenceReports />;
       case 'police-personnel':
       case 'police-directory':
         return <PoliceDirectory onNavigateToMap={navigateToMap} />;
+      case 'registered-devices':
+        return <DeviceManagement />;
+      case 'app-usage':
+        return <AppUsageSummaryPage />;
       case 'attendance':
         return <Attendance />;
       case 'station-visits':
@@ -74,6 +88,10 @@ export const App: React.FC = () => {
       case 'attendance-history':
       case 'audit-logs':
         return <AuditLogs />;
+      case 'scheduled-reports':
+        return <ScheduledReports />;
+      case 'report-downloads':
+        return <ReportDownloads />;
       case 'reports':
         return <ReportsAnalytics />;
       case 'headquarters-settings':

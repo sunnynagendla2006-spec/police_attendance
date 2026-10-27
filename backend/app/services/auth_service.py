@@ -26,9 +26,13 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 async def authenticate_user(
     db: AsyncIOMotorDatabase,
     username: str,
-    password: str
+    password: str,
+    device_id: Optional[str] = None,
+    device_model: Optional[str] = None,
+    os_version: Optional[str] = None,
+    app_version: Optional[str] = None
 ) -> Dict[str, Any]:
-    """Authenticate username and password against MongoDB users collection."""
+    """Authenticate username and password against MongoDB users collection, enforcing device binding for constables."""
     username_clean = username.strip().lower()
     user = await db.users.find_one({"username": username_clean})
 
@@ -125,6 +129,82 @@ async def authenticate_user(
             detail="Invalid credentials"
         )
 
+    # Device Binding Security: If constable account, enforce approved device binding
+    user_id_str = str(user["_id"])
+    role = user.get("role", "constable")
+    if role == "constable" and device_id:
+        this_device = await db.registered_devices.find_one({
+            "user_id": user_id_str,
+            "$or": [
+                {"device_identifier": device_id},
+                {"device_id": device_id}
+            ]
+        })
+        if this_device:
+            if this_device.get("approval_status") == "REVOKED":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Single-Device Security: Unauthorized device. Your registered mobile device has been REVOKED by an administrator. Contact headquarters for device re-approval."
+                )
+            if this_device.get("approval_status") == "PENDING":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Single-Device Security: Unauthorized device. Mobile device registration is pending administrator approval."
+                )
+            # Approved match -> update last authentication timestamp
+            await db.registered_devices.update_one(
+                {"_id": this_device["_id"]},
+                {"$set": {"last_authenticated_at": now, "updated_at": now}}
+            )
+        else:
+            # Device not registered for this constable. Check if active approved device exists
+            active_device = await db.registered_devices.find_one({
+                "user_id": user_id_str,
+                "approval_status": "APPROVED"
+            })
+            if active_device:
+                await record_audit_log(
+                    db=db,
+                    actor_user_id=user_id_str,
+                    actor_username=user.get("username", "constable"),
+                    action="UNAUTHORIZED_DEVICE_LOGIN_REJECTED",
+                    entity_type="device",
+                    entity_id=device_id,
+                    details={
+                        "approved_device": active_device.get("device_identifier") or active_device.get("device_id"),
+                        "rejected_attempt_device": device_id,
+                        "attempted_model": device_model
+                    }
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Single-Device Security: Unauthorized device. This constable account is bound to another approved mobile device ({active_device.get('device_model', 'Authorized Device')}). Device replacement requires administrator approval."
+                )
+            else:
+                # First device registration for this constable - auto-provision with APPROVED status
+                await db.registered_devices.insert_one({
+                    "user_id": user_id_str,
+                    "device_identifier": device_id,
+                    "device_id": device_id,
+                    "device_model": device_model or "Android Mobile",
+                    "os_version": os_version or "Android",
+                    "app_version": app_version or "1.0.0",
+                    "approval_status": "APPROVED",
+                    "registered_at": now,
+                    "last_authenticated_at": now,
+                    "created_at": now,
+                    "updated_at": now
+                })
+                await record_audit_log(
+                    db=db,
+                    actor_user_id=user_id_str,
+                    actor_username=user.get("username", "constable"),
+                    action="DEVICE_REGISTERED_AUTO_APPROVED",
+                    entity_type="device",
+                    entity_id=device_id,
+                    details={"model": device_model, "os": os_version}
+                )
+
     # Successful login: reset failed attempts & update last_login, clear must_change_password
     await db.users.update_one(
         {"_id": user["_id"]},
@@ -207,3 +287,70 @@ async def get_current_active_officer(
             detail="Officer profile record not found for this account"
         )
     return profile
+
+async def get_permitted_location_ids(
+    user: Dict[str, Any],
+    db: AsyncIOMotorDatabase
+) -> Optional[List[str]]:
+    """
+    Returns None if Super Admin (unrestricted organization-wide access).
+    Returns List[str] of permitted location IDs for Admin / HQ Admin.
+    Returns active assigned location ID for Constable.
+    """
+    role = user.get("role", "constable")
+    if role == "super_admin":
+        return None  # None indicates all locations permitted
+
+    user_id = str(user["_id"])
+    if role in ("hq_admin", "admin"):
+        # Check explicit assigned_location_ids on user record
+        assigned = list(user.get("assigned_location_ids", []))
+        
+        # Also check headquarters documents where assigned_admin_ids contains this admin
+        query = {
+            "$or": [
+                {"assigned_admin_ids": user_id},
+                {"assigned_admin_ids": ObjectId(user_id) if ObjectId.is_valid(user_id) else user_id}
+            ]
+        }
+        cursor = db.headquarters.find(query)
+        hqs = await cursor.to_list(100)
+        for h in hqs:
+            hid = str(h["_id"])
+            if hid not in assigned:
+                assigned.append(hid)
+
+        # Fallback to primary/active headquarters if none explicitly assigned yet
+        if not assigned:
+            primary_hq = await db.headquarters.find_one({"is_primary": True})
+            if primary_hq:
+                assigned.append(str(primary_hq["_id"]))
+
+        return assigned
+
+    # Constables: only their actively assigned duty location
+    assignment = await db.location_assignments.find_one({
+        "user_id": user_id,
+        "status": "ACTIVE"
+    }, sort=[("start_time", -1)])
+    if assignment:
+        return [str(assignment["location_id"])]
+
+    # If no assignment, return primary HQ
+    primary_hq = await db.headquarters.find_one({"is_primary": True})
+    return [str(primary_hq["_id"])] if primary_hq else []
+
+async def verify_location_access(
+    user: Dict[str, Any],
+    location_id: str,
+    db: AsyncIOMotorDatabase
+):
+    """Raise 403 Forbidden if user is not authorized for the specified location."""
+    permitted = await get_permitted_location_ids(user, db)
+    if permitted is None:
+        return  # Super admin has unrestricted access
+    if str(location_id) not in permitted:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Access denied. You do not have permission to access location '{location_id}'."
+        )

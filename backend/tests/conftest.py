@@ -1,9 +1,13 @@
+import logging
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 from motor.motor_asyncio import AsyncIOMotorClient
 from app.core.config import settings
 from app.core.database import db_manager, setup_database_indexes, seed_default_headquarters_and_admin
 from main import app
+
+logging.getLogger("pymongo").setLevel(logging.WARNING)
+logging.getLogger("motor").setLevel(logging.WARNING)
 
 # Target isolated test database
 settings.MONGODB_DATABASE = "policehq_geoattend_test"
@@ -21,7 +25,9 @@ async def setup_test_db():
         "users", "officer_profiles", "headquarters", "geofence_configurations",
         "registered_devices", "location_observations", "geofence_events",
         "attendance_visits", "attendance_correction_requests", "audit_logs",
-        "refresh_sessions", "synchronization_records"
+        "refresh_sessions", "synchronization_records",
+        "location_assignments", "scheduled_snapshots", "location_schedule_configs",
+        "scheduled_reports", "report_downloads", "app_usage_summaries", "app_usage_policies"
     ]:
         await db[col].delete_many({})
 

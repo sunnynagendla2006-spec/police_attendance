@@ -13,7 +13,17 @@ import {
   DailyTrendItem,
   AuditLog,
   FullAnalyticsData,
-  RecentActivityItem
+  RecentActivityItem,
+  DutyAssignment,
+  LocationScheduleConfig,
+  ScheduledLocationSnapshot,
+  OutsideGeofenceObservation,
+  DeviceRecord,
+  AppUsageSummary,
+  AppUsagePolicyConfig,
+  ScheduledReportRecord,
+  ReportDownloadRecord,
+  AdministratorUser
 } from '../types';
 
 const getApiBase = (): string => {
@@ -302,6 +312,249 @@ class ApiService {
     if (end_date) q.append('end_date', end_date);
     if (officer_id) q.append('officer_id', officer_id);
     return `${API_BASE}/reports/attendance.pdf?${q.toString()}`;
+  }
+
+  // --- Duty Assignments ---
+  async getAssignments(params?: {
+    location_id?: string;
+    constable_user_id?: string;
+    status?: string;
+  }): Promise<DutyAssignment[]> {
+    const q = new URLSearchParams();
+    if (params?.location_id) q.append('location_id', params.location_id);
+    if (params?.constable_user_id) q.append('constable_user_id', params.constable_user_id);
+    if (params?.status) q.append('status', params.status);
+    return this.request<DutyAssignment[]>(`/assignments?${q.toString()}`);
+  }
+
+  async createAssignment(data: {
+    constable_user_id: string;
+    location_id: string;
+    start_date: string;
+    end_date?: string;
+    notes?: string;
+  }): Promise<DutyAssignment> {
+    return this.request<DutyAssignment>('/assignments', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  }
+
+  async updateAssignment(
+    id: string,
+    updates: {
+      status?: string;
+      end_date?: string;
+      notes?: string;
+    }
+  ): Promise<DutyAssignment> {
+    return this.request<DutyAssignment>(`/assignments/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates)
+    });
+  }
+
+  async getMyActiveAssignment(): Promise<DutyAssignment | null> {
+    return this.request<DutyAssignment | null>('/assignments/my');
+  }
+
+  async getAvailableConstables(): Promise<Officer[]> {
+    return this.request<Officer[]>('/assignments/constables/available');
+  }
+
+  // --- Scheduled Snapshots & Geofence Checks ---
+  async getSnapshots(params?: {
+    location_id?: string;
+    user_id?: string;
+    date?: string;
+    snapshot_window?: string;
+    geofence_status?: string;
+  }): Promise<ScheduledLocationSnapshot[]> {
+    const q = new URLSearchParams();
+    if (params?.location_id) q.append('location_id', params.location_id);
+    if (params?.user_id) q.append('user_id', params.user_id);
+    if (params?.date) q.append('date', params.date);
+    if (params?.snapshot_window) q.append('snapshot_window', params.snapshot_window);
+    if (params?.geofence_status) q.append('geofence_status', params.geofence_status);
+    return this.request<ScheduledLocationSnapshot[]>(`/snapshots?${q.toString()}`);
+  }
+
+  async getOutsideGeofenceObservations(params?: {
+    location_id?: string;
+    date?: string;
+  }): Promise<OutsideGeofenceObservation[]> {
+    const q = new URLSearchParams();
+    if (params?.location_id) q.append('location_id', params.location_id);
+    if (params?.date) q.append('date', params.date);
+    return this.request<OutsideGeofenceObservation[]>(`/snapshots/outside-geofence?${q.toString()}`);
+  }
+
+  async getSnapshotScheduleConfig(): Promise<LocationScheduleConfig> {
+    return this.request<LocationScheduleConfig>('/snapshots/schedule-config');
+  }
+
+  async updateSnapshotScheduleConfig(data: {
+    morning_snapshot_time?: string;
+    evening_snapshot_time?: string;
+    timezone?: string;
+    grace_period_minutes?: number;
+  }): Promise<LocationScheduleConfig> {
+    return this.request<LocationScheduleConfig>('/snapshots/schedule-config', {
+      method: 'PATCH',
+      body: JSON.stringify(data)
+    });
+  }
+
+  // --- Registered Devices ---
+  async getDevices(params?: {
+    user_id?: string;
+    status?: string;
+    search?: string;
+  }): Promise<DeviceRecord[]> {
+    const q = new URLSearchParams();
+    if (params?.user_id) q.append('user_id', params.user_id);
+    if (params?.status) q.append('status', params.status);
+    if (params?.search) q.append('search', params.search);
+    return this.request<DeviceRecord[]>(`/devices?${q.toString()}`);
+  }
+
+  async approveDevice(device_id: string, reason?: string): Promise<{ status: string; message: string }> {
+    return this.request<{ status: string; message: string }>('/devices/approve', {
+      method: 'POST',
+      body: JSON.stringify({ device_id, reason })
+    });
+  }
+
+  async replaceDevice(data: {
+    constable_user_id: string;
+    old_device_id: string;
+    new_device_id: string;
+    reason: string;
+  }): Promise<{ status: string; message: string }> {
+    return this.request<{ status: string; message: string }>('/devices/replace', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  }
+
+  // --- App Usage ---
+  async getAppUsageSummaries(params?: {
+    date?: string;
+    user_id?: string;
+    only_exceeding_threshold?: boolean;
+    location_id?: string;
+  }): Promise<AppUsageSummary[]> {
+    const q = new URLSearchParams();
+    if (params?.date) q.append('date', params.date);
+    if (params?.user_id) q.append('user_id', params.user_id);
+    if (params?.only_exceeding_threshold !== undefined) {
+      q.append('only_exceeding_threshold', String(params.only_exceeding_threshold));
+    }
+    if (params?.location_id) q.append('location_id', params.location_id);
+    return this.request<AppUsageSummary[]>(`/app-usage?${q.toString()}`);
+  }
+
+  async getAppUsagePolicy(): Promise<AppUsagePolicyConfig> {
+    return this.request<AppUsagePolicyConfig>('/app-usage/policy');
+  }
+
+  async updateAppUsagePolicy(data: {
+    warning_threshold_minutes?: number;
+    approved_work_packages?: string[];
+  }): Promise<AppUsagePolicyConfig> {
+    return this.request<AppUsagePolicyConfig>('/app-usage/policy', {
+      method: 'PATCH',
+      body: JSON.stringify(data)
+    });
+  }
+
+  // --- Scheduled Reports & Downloads ---
+  async getScheduledReports(params?: {
+    report_date?: string;
+    location_id?: string;
+  }): Promise<ScheduledReportRecord[]> {
+    const q = new URLSearchParams();
+    if (params?.report_date) q.append('report_date', params.report_date);
+    if (params?.location_id) q.append('location_id', params.location_id);
+    return this.request<ScheduledReportRecord[]>(`/reports/scheduled?${q.toString()}`);
+  }
+
+  async generateReport(data: {
+    report_type: string;
+    report_date: string;
+    location_id?: string;
+  }): Promise<ScheduledReportRecord> {
+    return this.request<ScheduledReportRecord>('/reports/generate', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  }
+
+  getReportDownloadUrl(params: {
+    report_type: string;
+    format: string;
+    report_date?: string;
+    start_date?: string;
+    end_date?: string;
+    location_id?: string;
+  }): string {
+    const q = new URLSearchParams();
+    q.append('report_type', params.report_type);
+    q.append('format', params.format);
+    if (params.report_date) q.append('report_date', params.report_date);
+    if (params.start_date) q.append('start_date', params.start_date);
+    if (params.end_date) q.append('end_date', params.end_date);
+    if (params.location_id) q.append('location_id', params.location_id);
+    return `${API_BASE}/reports/download?${q.toString()}`;
+  }
+
+  async downloadReportFile(params: {
+    report_type: string;
+    format: 'PDF' | 'CSV';
+    report_date?: string;
+    start_date?: string;
+    end_date?: string;
+    location_id?: string;
+  }): Promise<void> {
+    const url = this.getReportDownloadUrl(params);
+    const headers = this.getHeaders();
+    const response = await fetch(url, { headers });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to download report');
+    }
+
+    const blob = await response.blob();
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    const dateStr = params.report_date || params.start_date || new Date().toISOString().split('T')[0];
+    const extension = params.format.toLowerCase();
+    link.download = `${params.report_type.toLowerCase()}_${dateStr}.${extension}`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(downloadUrl);
+  }
+
+  async getDownloadHistory(limit = 50): Promise<ReportDownloadRecord[]> {
+    return this.request<ReportDownloadRecord[]>(`/reports/downloads/history?limit=${limit}`);
+  }
+
+  // --- Administrator Permissions ---
+  async getAdministrators(): Promise<AdministratorUser[]> {
+    return this.request<AdministratorUser[]>('/auth/administrators');
+  }
+
+  async updateAdminLocationPermissions(
+    admin_user_id: string,
+    assigned_location_ids: string[]
+  ): Promise<{ status: string; message: string }> {
+    return this.request<{ status: string; message: string }>('/auth/admin-location-permissions', {
+      method: 'POST',
+      body: JSON.stringify({ admin_user_id, assigned_location_ids })
+    });
   }
 
   // --- Audit ---

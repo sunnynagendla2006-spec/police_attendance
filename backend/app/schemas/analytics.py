@@ -4,6 +4,10 @@ from pydantic import BaseModel
 
 class OverviewStats(BaseModel):
     registered_officers: int = 0
+    registered_admins: int = 0
+    active_locations_count: int = 0
+    assigned_to_duty: int = 0
+    location_available: int = 0
     officers_inside_hq: int = 0
     officers_outside_hq: int = 0
     officers_on_duty_today: int = 0
@@ -19,6 +23,9 @@ class OverviewStats(BaseModel):
     incomplete_sessions_today: int = 0
     total_entries_today: int = 0
     total_exits_today: int = 0
+    scheduled_reports_today: int = 0
+    device_security_alerts: int = 0
+    app_usage_summaries_today: int = 0
 
 class DailyTrendItem(BaseModel):
     date: str

@@ -14,6 +14,8 @@ class AppConstants {
   static const String keyOfflineQueue = 'offline_gps_observations_queue';
   static const String keyCustomBaseUrl = 'custom_api_base_url';
   static const String keyTrackingActive = 'location_tracking_active_flag';
+  static const String keyDeviceId = 'bound_hardware_device_id';
+  static const String keyActiveAssignment = 'cached_duty_assignment';
 
   // Eluru District Police Headquarters Defaults
   static const String hqName = 'Eluru District Police Headquarters';

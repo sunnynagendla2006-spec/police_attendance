@@ -15,6 +15,8 @@ class HeadquartersResponse(BaseModel):
     radius_meters: float = 100.0
     status: str = "ACTIVE" # ACTIVE, INACTIVE, MAINTENANCE
     is_primary: bool = True
+    assigned_admin_ids: List[str] = []
+    assigned_constables_count: int = 0
     description: Optional[str] = None
     created_at: datetime
     updated_at: datetime
@@ -31,6 +33,7 @@ class HeadquartersCreateRequest(BaseModel):
     radius_meters: float = Field(100.0, gt=10.0, le=5000.0, description="Geofence boundary radius in meters")
     status: str = Field("ACTIVE", pattern="^(ACTIVE|INACTIVE|MAINTENANCE)$")
     is_primary: bool = Field(False, description="Whether this facility is the primary operational headquarters")
+    assigned_admin_ids: Optional[List[str]] = Field(default_factory=list)
     description: Optional[str] = None
 
 class HeadquartersUpdateRequest(BaseModel):

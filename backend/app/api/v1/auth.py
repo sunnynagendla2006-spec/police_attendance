@@ -21,12 +21,14 @@ from app.schemas.auth import (
     RefreshTokenRequest,
     ForgotPasswordRequest,
     AdminResetPasswordRequest,
+    AdminLocationAssignmentRequest,
     OfficerProfileBrief
 )
 from app.services.auth_service import (
     authenticate_user,
     get_current_user,
-    require_roles
+    require_roles,
+    get_permitted_location_ids
 )
 from app.services.audit_service import record_audit_log
 
@@ -55,14 +57,25 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 @router.post("/login", response_model=TokenResponse)
 async def login(req: LoginRequest, db: AsyncIOMotorDatabase = Depends(get_database)):
-    """Authenticate user with username and password."""
-    user = await authenticate_user(db, req.username, req.password)
+    """Authenticate user with username and password, enforcing single-device binding for constables."""
+    user = await authenticate_user(
+        db=db,
+        username=req.username,
+        password=req.password,
+        device_id=req.device_id,
+        device_model=req.device_model,
+        os_version=req.os_version,
+        app_version=req.app_version
+    )
     user_id = str(user["_id"])
     role = user.get("role", "constable")
     must_change = user.get("must_change_password", False)
 
     # Fetch profile if exists
     profile_brief = await _get_profile_brief(db, user_id, user.get("username", ""))
+
+    # Fetch permitted location IDs
+    permitted_locs = await get_permitted_location_ids(user, db)
 
     token_data = {
         "sub": user_id,
@@ -79,6 +92,7 @@ async def login(req: LoginRequest, db: AsyncIOMotorDatabase = Depends(get_databa
         role=role,
         account_status=user.get("account_status", "ACTIVE"),
         must_change_password=must_change,
+        assigned_location_ids=permitted_locs or [],
         created_at=user.get("created_at", datetime.now(timezone.utc)),
         last_login_at=user.get("last_login_at"),
         profile=profile_brief
@@ -186,6 +200,7 @@ async def get_me(
     """Get current authenticated user profile."""
     user_id = str(current_user["_id"])
     profile_brief = await _get_profile_brief(db, user_id, current_user.get("username", ""))
+    permitted_locs = await get_permitted_location_ids(current_user, db)
 
     return UserResponse(
         id=user_id,
@@ -193,10 +208,100 @@ async def get_me(
         role=current_user.get("role", "constable"),
         account_status=current_user.get("account_status", "ACTIVE"),
         must_change_password=current_user.get("must_change_password", False),
+        assigned_location_ids=permitted_locs or [],
         created_at=current_user.get("created_at", datetime.now(timezone.utc)),
         last_login_at=current_user.get("last_login_at"),
         profile=profile_brief
     )
+
+@router.get("/administrators")
+async def list_administrators(
+    super_admin: Dict[str, Any] = Depends(require_roles(["super_admin"])),
+    db: AsyncIOMotorDatabase = Depends(get_database)
+):
+    """Super Admin: View all registered administrators and their assigned location permissions."""
+    cursor = db.users.find({"role": {"$in": ["super_admin", "hq_admin", "admin"]}})
+    admins = await cursor.to_list(100)
+    
+    # Retrieve all locations for name resolution
+    all_hqs = await db.headquarters.find().to_list(200)
+    hq_map = {str(h["_id"]): h.get("name", "Unknown Location") for h in all_hqs}
+
+    results = []
+    for a in admins:
+        aid = str(a["_id"])
+        profile = await _get_profile_brief(db, aid, a.get("username", ""))
+        permitted = await get_permitted_location_ids(a, db) or []
+        
+        assigned_details = []
+        for lid in permitted:
+            assigned_details.append({
+                "location_id": lid,
+                "location_name": hq_map.get(lid, "Authorized Facility")
+            })
+
+        results.append({
+            "id": aid,
+            "username": a["username"],
+            "role": a.get("role", "admin"),
+            "account_status": a.get("account_status", "ACTIVE"),
+            "profile": profile,
+            "assigned_location_ids": permitted,
+            "assigned_locations": assigned_details,
+            "created_at": a.get("created_at"),
+            "last_login_at": a.get("last_login_at")
+        })
+    return results
+
+@router.post("/admin-location-permissions")
+async def update_admin_location_permissions(
+    req: AdminLocationAssignmentRequest,
+    super_admin: Dict[str, Any] = Depends(require_roles(["super_admin"])),
+    db: AsyncIOMotorDatabase = Depends(get_database)
+):
+    """Super Admin: Assign or update permitted duty locations for an Administrator."""
+    target_user = await db.users.find_one({"_id": ObjectId(req.admin_user_id) if ObjectId.is_valid(req.admin_user_id) else req.admin_user_id})
+    if not target_user:
+        raise HTTPException(status_code=404, detail="Target administrator not found")
+    
+    if target_user.get("role") == "super_admin":
+        raise HTTPException(status_code=400, detail="Cannot restrict Super Admin location permissions; Super Admin has organization-wide access.")
+
+    # Update assigned_location_ids on the administrator record
+    now = datetime.now(timezone.utc)
+    await db.users.update_one(
+        {"_id": target_user["_id"]},
+        {"$set": {"assigned_location_ids": req.assigned_location_ids, "updated_at": now}}
+    )
+
+    # Also sync assigned_admin_ids on the target headquarters records
+    admin_id_str = str(target_user["_id"])
+    for lid in req.assigned_location_ids:
+        if ObjectId.is_valid(lid):
+            await db.headquarters.update_one(
+                {"_id": ObjectId(lid)},
+                {"$addToSet": {"assigned_admin_ids": admin_id_str}}
+            )
+
+    await record_audit_log(
+        db=db,
+        actor_user_id=str(super_admin["_id"]),
+        actor_username=super_admin["username"],
+        action="ADMIN_LOCATION_PERMISSIONS_UPDATED",
+        target_type="user",
+        target_id=req.admin_user_id,
+        reason=req.audit_reason,
+        metadata={
+            "admin_username": target_user["username"],
+            "new_assigned_location_ids": req.assigned_location_ids
+        }
+    )
+
+    return {
+        "status": "SUCCESS",
+        "message": f"Successfully updated location permissions for administrator {target_user['username']} ({len(req.assigned_location_ids)} locations assigned).",
+        "assigned_location_ids": req.assigned_location_ids
+    }
 
 @router.post("/reset-password")
 async def admin_reset_password(

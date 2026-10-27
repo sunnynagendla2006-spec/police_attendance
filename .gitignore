@@ -42,3 +42,7 @@ dist/
 .idea/
 Thumbs.db
 Desktop.ini
+
+# Android / Mobile Binaries
+*.apk
+*.aab

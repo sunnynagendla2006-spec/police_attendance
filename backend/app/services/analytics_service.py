@@ -88,7 +88,18 @@ async def compute_overview_stats(db: AsyncIOMotorDatabase) -> OverviewStats:
     not_recorded = max(0, reg_count - officers_on_duty)
     compliance_pct = round((officers_on_duty / reg_count * 100) if reg_count > 0 else 0.0, 1)
 
-    # 4. Yesterday's comparisons
+    # 4. Organization-wide Multi-Location & Duty Metrics
+    admin_count = await db.users.count_documents({"role": {"$in": ["super_admin", "hq_admin", "admin"]}})
+    active_locs_count = await db.headquarters.count_documents({"status": "ACTIVE"})
+    assigned_duty_count = await db.location_assignments.count_documents({"status": "ACTIVE"})
+    location_avail_count = inside_count + outside_count
+
+    today_str = now.strftime("%Y-%m-%d")
+    sched_rep_count = await db.scheduled_reports.count_documents({"reporting_date": today_str})
+    device_alerts = await db.audit_logs.count_documents({"action": {"$regex": "UNAUTHORIZED_DEVICE|DEVICE_REVOKED"}})
+    app_usage_count = await db.app_usage_summaries.count_documents({"reporting_date": today_str})
+
+    # 5. Yesterday's comparisons
     yest_visits = await db.attendance_visits.find({
         "entry_at": {"$gte": start_of_yesterday, "$lt": start_of_today}
     }).to_list(length=1000)
@@ -97,6 +108,10 @@ async def compute_overview_stats(db: AsyncIOMotorDatabase) -> OverviewStats:
 
     return OverviewStats(
         registered_officers=reg_count,
+        registered_admins=admin_count,
+        active_locations_count=active_locs_count,
+        assigned_to_duty=assigned_duty_count,
+        location_available=location_avail_count,
         officers_inside_hq=inside_count,
         officers_outside_hq=outside_count,
         officers_on_duty_today=officers_on_duty,
@@ -111,7 +126,10 @@ async def compute_overview_stats(db: AsyncIOMotorDatabase) -> OverviewStats:
         yesterday_compliance_percentage=yest_compliance_pct,
         incomplete_sessions_today=incomplete_sessions,
         total_entries_today=len(today_visits),
-        total_exits_today=total_exits
+        total_exits_today=total_exits,
+        scheduled_reports_today=sched_rep_count,
+        device_security_alerts=device_alerts,
+        app_usage_summaries_today=app_usage_count
     )
 
 async def compute_daily_trends(db: AsyncIOMotorDatabase, days: int = 7) -> List[DailyTrendItem]:

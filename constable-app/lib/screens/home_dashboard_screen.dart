@@ -25,6 +25,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
 
   UserModel? _user;
   List<AttendanceVisitModel> _todayVisits = [];
+  Map<String, dynamic>? _activeAssignment;
   bool _isLoading = true;
   int _queuedCount = 0;
   int _selectedIndex = 0;
@@ -90,7 +91,15 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       debugPrint('Note: /headquarters/active fetch error: $e');
     }
 
-    // 5. Fetch personal attendance records
+    // 5. Fetch active duty assignment
+    try {
+      final assignment = await _apiService.getMyActiveAssignment();
+      if (mounted && assignment != null) {
+        setState(() => _activeAssignment = assignment);
+      }
+    } catch (_) {}
+
+    // 6. Fetch personal attendance records
     try {
       final visits = await _apiService.getMyAttendance();
       if (mounted) {
@@ -100,7 +109,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       debugPrint('Note: attendance fetch error: $e');
     }
 
-    // 6. Check queued offline items
+    // 7. Check queued offline items
     try {
       final queued = await _queueService.getQueuedCount();
       if (mounted) {
@@ -132,6 +141,12 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         lon: hq.longitude,
         radius: hq.radiusMeters,
       );
+    } catch (_) {}
+
+    // Refresh active assignment
+    try {
+      final assignment = await _apiService.getMyActiveAssignment();
+      if (mounted) setState(() => _activeAssignment = assignment);
     } catch (_) {}
 
     // Refresh attendance & queue
@@ -219,6 +234,67 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
               ),
             ),
             const SizedBox(height: 16),
+
+            // Active Duty Station Card
+            if (_activeAssignment != null) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFBFDBFE), width: 1.2),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.shield_outlined, color: AppTheme.policeBlue, size: 24),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'ASSIGNED DUTY STATION',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.policeNavy,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          Text(
+                            _activeAssignment!['location_name'] ?? 'Assigned Station',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.textMain,
+                            ),
+                          ),
+                          if (_activeAssignment!['notes'] != null)
+                            Text(
+                              _activeAssignment!['notes'],
+                              style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade100,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Text(
+                        'ACTIVE',
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.green),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+            ],
 
             // Real-Time Geofence Presence Card
             Container(

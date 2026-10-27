@@ -22,7 +22,12 @@ import {
   Shield,
   Clock,
   AlertTriangle,
-  ChevronDown
+  ChevronDown,
+  Building,
+  ShieldAlert,
+  Smartphone,
+  Download,
+  FileCheck2
 } from 'lucide-react';
 import { User } from '../types';
 import { wsService } from '../services/websocket';
@@ -120,12 +125,18 @@ export const DashboardLayout: React.FC<Props> = ({
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, category: 'Operations' },
     { id: 'live-map', label: 'Live Location Map', icon: MapPin, category: 'Operations' },
+    { id: 'duty-assignments', label: 'Duty Assignments', icon: Building, category: 'Operations' },
+    { id: 'outside-geofence', label: 'Outside-Geofence Audit', icon: ShieldAlert, category: 'Operations' },
     { id: 'police-personnel', label: 'Police Personnel', icon: Users, category: 'Personnel' },
-    { id: 'attendance', label: 'Attendance', icon: CalendarCheck, category: 'Attendance' },
+    { id: 'registered-devices', label: 'Device Binding', icon: Smartphone, category: 'Personnel' },
+    { id: 'app-usage', label: 'App Usage Summaries', icon: Smartphone, category: 'Personnel' },
+    { id: 'attendance', label: 'Daily Attendance', icon: CalendarCheck, category: 'Attendance' },
     { id: 'station-visits', label: 'Station Visits', icon: History, category: 'Attendance' },
     { id: 'attendance-history', label: 'Attendance History', icon: FileText, category: 'Attendance' },
+    { id: 'scheduled-reports', label: 'Scheduled Daily Reports', icon: FileCheck2, category: 'Reports' },
+    { id: 'report-downloads', label: 'Report Downloads (12)', icon: Download, category: 'Reports' },
     { id: 'reports', label: 'Reports & Analytics', icon: BarChart3, category: 'Analytics' },
-    { id: 'headquarters-settings', label: 'Headquarters & Geofence Settings', icon: ShieldCheck, category: 'System' },
+    { id: 'headquarters-settings', label: 'Headquarters & Geofences', icon: ShieldCheck, category: 'System' },
     { id: 'notifications-alerts', label: 'Notifications / Alerts', icon: Bell, category: 'System', badge: notifications.length > 0 ? notifications.length : undefined },
     { id: 'user-management', label: 'User Management', icon: UserCog, category: 'Administration' },
     { id: 'system-settings', label: 'System Settings', icon: Settings, category: 'Administration' }

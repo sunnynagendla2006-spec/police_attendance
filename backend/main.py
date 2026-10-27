@@ -1,9 +1,11 @@
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.database import connect_to_mongodb, close_mongodb_connection
+from app.services.scheduler_service import start_scheduler_loop
 from app.api.v1 import (
     auth,
     officers,
@@ -14,7 +16,11 @@ from app.api.v1 import (
     reports,
     audit,
     system,
-    websocket
+    websocket,
+    assignments,
+    snapshots,
+    devices,
+    app_usage
 )
 
 logging.basicConfig(
@@ -27,16 +33,22 @@ logger = logging.getLogger("policehq_geoattend")
 async def lifespan(app: FastAPI):
     # Startup: connect to MongoDB, setup indexes, seed Eluru HQ & initial accounts
     logger.info("Starting up PoliceHQ GeoAttend backend service...")
-    await connect_to_mongodb()
+    db = await connect_to_mongodb()
+
+    # Launch background automated report scheduler
+    scheduler_task = asyncio.create_task(start_scheduler_loop(db))
+
     yield
-    # Shutdown: close DB connection
+
+    # Shutdown: cancel background scheduler and close DB connection
     logger.info("Shutting down PoliceHQ GeoAttend backend service...")
+    scheduler_task.cancel()
     await close_mongodb_connection()
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    description="Police Headquarters Geofencing, Attendance, and Visit Monitoring System for Eluru Police HQ",
-    version="1.0.0",
+    description="Police Headquarters Multi-Location Geofencing, Duty Assignments, and Scheduled Workforce Reporting",
+    version="2.0.0",
     docs_url="/api/docs",
     redoc_url="/api/redoc",
     openapi_url="/api/openapi.json",
@@ -59,6 +71,10 @@ API_V1_PREFIX = "/api/v1"
 app.include_router(auth.router, prefix=API_V1_PREFIX)
 app.include_router(officers.router, prefix=API_V1_PREFIX)
 app.include_router(headquarters.router, prefix=API_V1_PREFIX)
+app.include_router(assignments.router, prefix=API_V1_PREFIX)
+app.include_router(snapshots.router, prefix=API_V1_PREFIX)
+app.include_router(devices.router, prefix=API_V1_PREFIX)
+app.include_router(app_usage.router, prefix=API_V1_PREFIX)
 app.include_router(location.router, prefix=API_V1_PREFIX)
 app.include_router(attendance.router, prefix=API_V1_PREFIX)
 app.include_router(analytics.router, prefix=API_V1_PREFIX)

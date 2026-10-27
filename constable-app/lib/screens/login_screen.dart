@@ -143,9 +143,11 @@ class _LoginScreenState extends State<LoginScreen> {
             onPressed: () async {
               await _apiService.setBaseUrl(controller.text.trim());
               if (ctx.mounted) Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Server endpoint updated')),
-              );
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Server endpoint updated')),
+                );
+              }
             },
             child: const Text('Save'),
           ),

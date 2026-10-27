@@ -378,6 +378,78 @@ export const Overview: React.FC<Props> = ({ onNavigate }) => {
         })}
       </div>
 
+      {/* Multi-Location Duty & Operational Security Control Hub */}
+      <div className="bg-white border border-[#E2E8F0] rounded-xl p-5 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 mb-4 gap-2">
+          <div>
+            <h3 className="text-sm font-bold text-[#172B4D] flex items-center space-x-2">
+              <Shield className="w-4 h-4 text-[#17365D]" />
+              <span>Multi-Location Duty & Operational Security</span>
+            </h3>
+            <p className="text-xs text-[#64748B]">Station-scoped rosters, automated daily cutoff reporting, and hardware token binding</p>
+          </div>
+          <span className="text-[11px] font-semibold text-slate-500 bg-slate-50 px-2.5 py-1 rounded-md border border-slate-200">
+            Active Multi-Location System
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div
+            onClick={() => onNavigate('headquarters-settings')}
+            className="p-3.5 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 cursor-pointer transition"
+          >
+            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Duty Locations</div>
+            <div className="text-xl font-bold text-[#17365D] mt-0.5">{stats.active_locations_count ?? 1}</div>
+            <div className="text-[10px] text-slate-400 mt-0.5">Manage stations &rarr;</div>
+          </div>
+
+          <div
+            onClick={() => onNavigate('duty-assignments')}
+            className="p-3.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 cursor-pointer transition"
+          >
+            <div className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Assigned to Duty</div>
+            <div className="text-xl font-bold text-emerald-800 mt-0.5">{stats.assigned_to_duty ?? stats.registered_officers}</div>
+            <div className="text-[10px] text-emerald-600 mt-0.5">Roster status &rarr;</div>
+          </div>
+
+          <div
+            onClick={() => onNavigate('outside-geofence')}
+            className="p-3.5 rounded-lg bg-rose-50 hover:bg-rose-100 border border-rose-200 cursor-pointer transition"
+          >
+            <div className="text-[10px] font-bold text-rose-700 uppercase tracking-wider">Outside Perimeter</div>
+            <div className="text-xl font-bold text-rose-800 mt-0.5">{stats.officers_outside_hq}</div>
+            <div className="text-[10px] text-rose-600 mt-0.5">Breach audit &rarr;</div>
+          </div>
+
+          <div
+            onClick={() => onNavigate('registered-devices')}
+            className="p-3.5 rounded-lg bg-blue-50 hover:bg-blue-100 border border-blue-200 cursor-pointer transition"
+          >
+            <div className="text-[10px] font-bold text-blue-700 uppercase tracking-wider">Device Binding</div>
+            <div className="text-xl font-bold text-blue-800 mt-0.5">{stats.registered_officers}</div>
+            <div className="text-[10px] text-blue-600 mt-0.5">Hardware locks &rarr;</div>
+          </div>
+
+          <div
+            onClick={() => onNavigate('scheduled-reports')}
+            className="p-3.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 cursor-pointer transition"
+          >
+            <div className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider">Daily Reports</div>
+            <div className="text-xl font-bold text-indigo-800 mt-0.5">{stats.scheduled_reports_today ?? 2}</div>
+            <div className="text-[10px] text-indigo-600 mt-0.5">10:30 & 17:00 cutoffs &rarr;</div>
+          </div>
+
+          <div
+            onClick={() => onNavigate('app-usage')}
+            className="p-3.5 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 cursor-pointer transition"
+          >
+            <div className="text-[10px] font-bold text-amber-700 uppercase tracking-wider">App Usage Today</div>
+            <div className="text-xl font-bold text-amber-800 mt-0.5">{stats.app_usage_summaries_today ?? 0}</div>
+            <div className="text-[10px] text-amber-600 mt-0.5">Foreground audit &rarr;</div>
+          </div>
+        </div>
+      </div>
+
       {/* Attendance & Personnel Visual Analytics Charts (Recharts) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Attendance by Hour (Today) */}

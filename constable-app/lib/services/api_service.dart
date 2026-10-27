@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 import '../core/constants.dart';
 import '../models/user_model.dart';
 import '../models/attendance_model.dart';
@@ -14,6 +15,16 @@ class ApiService {
 
   String? _cachedToken;
   String? _customBaseUrl;
+
+  Future<String> getOrCreateDeviceId() async {
+    final prefs = await SharedPreferences.getInstance();
+    var devId = prefs.getString(AppConstants.keyDeviceId);
+    if (devId == null || devId.trim().isEmpty) {
+      devId = 'dev-${const Uuid().v4()}';
+      await prefs.setString(AppConstants.keyDeviceId, devId);
+    }
+    return devId;
+  }
 
   static String normalizeUrl(String raw) {
     var url = raw.trim();
@@ -132,15 +143,26 @@ class ApiService {
     return headers;
   }
 
-  // 1. Login
-  Future<AuthResponse> login(String username, String password) async {
+  // 1. Login with Hardware Device Binding
+  Future<AuthResponse> login(
+    String username,
+    String password, {
+    String? deviceModel,
+    String? osVersion,
+  }) async {
     final url = Uri.parse('${await baseUrl}/auth/login');
+    final deviceId = await getOrCreateDeviceId();
+
     final response = await http.post(
       url,
       headers: await _headers(needsAuth: false),
       body: jsonEncode({
         'username': username.trim(),
         'password': password.trim(),
+        'device_id': deviceId,
+        'device_model': deviceModel ?? 'Android Handset',
+        'os_version': osVersion ?? 'Android 14',
+        'app_version': '1.2.0',
       }),
     );
 
@@ -290,7 +312,74 @@ class ApiService {
     }
   }
 
-  // 8. Logout
+  // 8. Duty Assignment & Multi-Location Support
+  Future<Map<String, dynamic>?> getMyActiveAssignment() async {
+    try {
+      final url = Uri.parse('${await baseUrl}/assignments/my');
+      final response = await http.get(url, headers: await _headers(needsAuth: true));
+      if (response.statusCode == 200 && response.body.isNotEmpty && response.body != 'null') {
+        final data = jsonDecode(response.body);
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(AppConstants.keyActiveAssignment, response.body);
+        return data is Map<String, dynamic> ? data : null;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  // 9. Submit Scheduled Snapshot (10 AM Morning / 6 PM Evening)
+  Future<Map<String, dynamic>> submitScheduledSnapshot({
+    required String snapshotWindow,
+    required double latitude,
+    required double longitude,
+    required double accuracyMeters,
+    String? dutyLocationId,
+    String? scheduledTime,
+  }) async {
+    final url = Uri.parse('${await baseUrl}/snapshots');
+    final deviceId = await getOrCreateDeviceId();
+    final nowIso = DateTime.now().toUtc().toIso8601String();
+
+    final response = await http.post(
+      url,
+      headers: await _headers(needsAuth: true),
+      body: jsonEncode({
+        'snapshot_window': snapshotWindow,
+        'scheduled_time': scheduledTime ?? nowIso,
+        'observed_at': nowIso,
+        'latitude': latitude,
+        'longitude': longitude,
+        'accuracy_meters': accuracyMeters,
+        'device_id': deviceId,
+        'duty_location_id': dutyLocationId,
+      }),
+    );
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return jsonDecode(response.body);
+    } else {
+      final error = jsonDecode(response.body);
+      throw Exception(error['detail'] ?? 'Failed to submit snapshot');
+    }
+  }
+
+  // 10. Submit Transparent App Usage Summary (Foreground usage)
+  Future<void> submitAppUsageSummary(List<Map<String, dynamic>> appUsageItems) async {
+    if (appUsageItems.isEmpty) return;
+    final url = Uri.parse('${await baseUrl}/app-usage');
+    final todayStr = DateTime.now().toIso8601String().split('T')[0];
+
+    await http.post(
+      url,
+      headers: await _headers(needsAuth: true),
+      body: jsonEncode({
+        'date': todayStr,
+        'usage_items': appUsageItems,
+      }),
+    );
+  }
+
+  // 11. Logout
   Future<void> logout() async {
     try {
       final url = Uri.parse('${await baseUrl}/auth/logout');

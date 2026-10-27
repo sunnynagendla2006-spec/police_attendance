@@ -130,10 +130,10 @@ class LocationTrackingService extends ChangeNotifier {
     // 1. Get initial position immediately
     await sendCurrentLocation();
 
-    // 2. Start streaming positions with accuracy and distance filter
+    // 2. Start streaming positions with balanced accuracy (fast satellite/Wi-Fi fix)
     final locationSettings = const LocationSettings(
       accuracy: LocationAccuracy.high,
-      distanceFilter: 10, // meters
+      distanceFilter: 0,
     );
 
     _positionStream?.cancel();
@@ -165,18 +165,29 @@ class LocationTrackingService extends ChangeNotifier {
 
   Future<void> sendCurrentLocation() async {
     try {
+      // 1. Fast path: send last known position immediately
+      final lastKnown = await Geolocator.getLastKnownPosition();
+      if (lastKnown != null && _lastPosition == null) {
+        await _onPositionUpdate(lastKnown);
+      }
+
+      // 2. Fresh GPS fix with balanced accuracy (fast and works indoors)
       final position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 10),
+          timeLimit: Duration(seconds: 15),
         ),
       );
       await _onPositionUpdate(position);
     } catch (e) {
-      // If GPS times out, check if stale
-      if (_lastUpdateTime != null && DateTime.now().difference(_lastUpdateTime!).inMinutes > 5) {
-        _state = TrackingState.stale;
-        _statusMessage = 'Location update delayed (>5 min)';
+      debugPrint('Location retrieval note: $e');
+      if (_lastPosition != null) {
+        // Fall back to broadcasting last known position to prevent stale state
+        try {
+          await _onPositionUpdate(_lastPosition!);
+        } catch (_) {}
+      } else {
+        _statusMessage = 'Acquiring GPS fix...';
         notifyListeners();
       }
     }
