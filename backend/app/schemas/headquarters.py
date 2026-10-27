@@ -22,34 +22,34 @@ class HeadquartersResponse(BaseModel):
     updated_at: datetime
 
 class HeadquartersCreateRequest(BaseModel):
-    name: str = Field(..., min_length=3, max_length=150, description="Official Headquarters / Facility Name")
-    code: str = Field(..., min_length=2, max_length=50, description="Station or Facility Code, e.g. AP-ELR-HQ")
-    state: str = Field("Andhra Pradesh", min_length=2)
-    district: str = Field("Eluru", min_length=2)
-    city: str = Field("Eluru", min_length=2)
-    address: str = Field(..., min_length=5, description="Full postal address")
+    name: str = Field(..., min_length=1, max_length=150, description="Official Headquarters / Facility Name")
+    code: str = Field(..., min_length=1, max_length=50, description="Station or Facility Code, e.g. AP-ELR-HQ")
+    state: str = Field("Andhra Pradesh", min_length=1)
+    district: str = Field("Eluru", min_length=1)
+    city: str = Field("Eluru", min_length=1)
+    address: str = Field(..., min_length=1, description="Full postal address")
     latitude: float = Field(..., ge=-90.0, le=90.0, description="Valid latitude between -90 and 90")
     longitude: float = Field(..., ge=-180.0, le=180.0, description="Valid longitude between -180 and 180")
-    radius_meters: float = Field(100.0, gt=10.0, le=5000.0, description="Geofence boundary radius in meters")
+    radius_meters: float = Field(100.0, ge=10.0, le=5000.0, description="Geofence boundary radius in meters")
     status: str = Field("ACTIVE", pattern="^(ACTIVE|INACTIVE|MAINTENANCE)$")
     is_primary: bool = Field(False, description="Whether this facility is the primary operational headquarters")
     assigned_admin_ids: Optional[List[str]] = Field(default_factory=list)
     description: Optional[str] = None
 
 class HeadquartersUpdateRequest(BaseModel):
-    name: Optional[str] = Field(None, min_length=3, max_length=150)
-    code: Optional[str] = Field(None, min_length=2, max_length=50)
+    name: Optional[str] = Field(None, min_length=1, max_length=150)
+    code: Optional[str] = Field(None, min_length=1, max_length=50)
     state: Optional[str] = None
     district: Optional[str] = None
     city: Optional[str] = None
-    address: Optional[str] = Field(None, min_length=5)
+    address: Optional[str] = Field(None, min_length=1)
     latitude: Optional[float] = Field(None, ge=-90.0, le=90.0)
     longitude: Optional[float] = Field(None, ge=-180.0, le=180.0)
-    radius_meters: Optional[float] = Field(None, gt=10.0, le=5000.0)
+    radius_meters: Optional[float] = Field(None, ge=10.0, le=5000.0)
     status: Optional[str] = Field(None, pattern="^(ACTIVE|INACTIVE|MAINTENANCE)$")
     is_primary: Optional[bool] = None
     description: Optional[str] = None
-    change_reason: str = Field(..., min_length=5, description="Administrative justification for updating HQ location")
+    change_reason: str = Field(..., min_length=1, description="Administrative justification for updating HQ location")
 
 class HeadquartersStatusUpdateRequest(BaseModel):
     status: str = Field(..., pattern="^(ACTIVE|INACTIVE|MAINTENANCE)$")

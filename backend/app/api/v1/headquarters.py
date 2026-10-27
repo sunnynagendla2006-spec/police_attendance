@@ -78,7 +78,7 @@ async def update_geofence(
 
 @router.get("/geofence/history", response_model=GeofenceHistoryResponse)
 async def get_history(
-    admin_user: Dict[str, Any] = Depends(require_roles(["super_admin", "hq_admin"])),
+    admin_user: Dict[str, Any] = Depends(require_roles(["super_admin", "hq_admin", "admin"])),
     db: AsyncIOMotorDatabase = Depends(get_database)
 ):
     """Retrieve configuration audit history."""
@@ -87,7 +87,7 @@ async def get_history(
 @router.post("", response_model=HeadquartersResponse, status_code=status.HTTP_201_CREATED)
 async def create_new_headquarters(
     req: HeadquartersCreateRequest,
-    admin_user: Dict[str, Any] = Depends(require_roles(["super_admin", "hq_admin"])),
+    admin_user: Dict[str, Any] = Depends(require_roles(["super_admin", "hq_admin", "admin"])),
     db: AsyncIOMotorDatabase = Depends(get_database)
 ):
     """Register a new headquarters or operational police post."""
@@ -96,7 +96,7 @@ async def create_new_headquarters(
 @router.get("/{headquarters_id}", response_model=HeadquartersResponse)
 async def get_hq_details(
     headquarters_id: str,
-    current_user: Dict[str, Any] = Depends(require_roles(["super_admin", "hq_admin"])),
+    current_user: Dict[str, Any] = Depends(require_roles(["super_admin", "hq_admin", "admin"])),
     db: AsyncIOMotorDatabase = Depends(get_database)
 ):
     """Retrieve details for a specific headquarters facility."""
@@ -106,19 +106,19 @@ async def get_hq_details(
 async def update_hq(
     headquarters_id: str,
     req: HeadquartersUpdateRequest,
-    admin_user: Dict[str, Any] = Depends(require_roles(["super_admin"])),
+    admin_user: Dict[str, Any] = Depends(require_roles(["super_admin", "hq_admin", "admin"])),
     db: AsyncIOMotorDatabase = Depends(get_database)
 ):
     """
     Authoritative update of headquarters details, coordinates, or geofence radius.
-    Records historical snapshot and audit log. Requires super_admin privilege.
+    Records historical snapshot and audit log.
     """
     return await update_headquarters(db=db, admin_user=admin_user, hq_id=headquarters_id, req=req)
 
 @router.patch("/{headquarters_id}/primary", response_model=HeadquartersResponse)
 async def designate_primary_hq(
     headquarters_id: str,
-    admin_user: Dict[str, Any] = Depends(require_roles(["super_admin"])),
+    admin_user: Dict[str, Any] = Depends(require_roles(["super_admin", "hq_admin", "admin"])),
     db: AsyncIOMotorDatabase = Depends(get_database)
 ):
     """Set specified facility as primary operational headquarters."""
@@ -128,7 +128,7 @@ async def designate_primary_hq(
 async def update_hq_status_route(
     headquarters_id: str,
     req: HeadquartersStatusUpdateRequest,
-    admin_user: Dict[str, Any] = Depends(require_roles(["super_admin", "hq_admin"])),
+    admin_user: Dict[str, Any] = Depends(require_roles(["super_admin", "hq_admin", "admin"])),
     db: AsyncIOMotorDatabase = Depends(get_database)
 ):
     """Activate, deactivate, or set maintenance status for headquarters."""

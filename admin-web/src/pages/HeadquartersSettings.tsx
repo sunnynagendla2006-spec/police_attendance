@@ -572,7 +572,7 @@ export const HeadquartersSettings: React.FC = () => {
               {saveError && (
                 <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center space-x-2.5 text-xs text-rose-800">
                   <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                  <span>{saveError}</span>
+                  <span>{typeof saveError === 'string' ? saveError : (saveError as any)?.message || JSON.stringify(saveError)}</span>
                 </div>
               )}
 

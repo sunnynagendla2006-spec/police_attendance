@@ -68,7 +68,25 @@ class ApiService {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.detail || `Request failed with status ${response.status}`);
+      let message = `Request failed with status ${response.status}`;
+      if (typeof errorData.detail === 'string') {
+        message = errorData.detail;
+      } else if (Array.isArray(errorData.detail)) {
+        message = errorData.detail
+          .map((d: any) => {
+            if (typeof d === 'string') return d;
+            const field = Array.isArray(d.loc)
+              ? d.loc.filter((x: any) => x !== 'body').join('.')
+              : '';
+            return field ? `${field}: ${d.msg || d}` : (d.msg || JSON.stringify(d));
+          })
+          .join('; ');
+      } else if (errorData.detail && typeof errorData.detail === 'object') {
+        message = JSON.stringify(errorData.detail);
+      } else if (typeof errorData.message === 'string') {
+        message = errorData.message;
+      }
+      throw new Error(message);
     }
 
     return response.json();

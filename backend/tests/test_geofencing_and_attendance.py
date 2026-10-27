@@ -199,3 +199,35 @@ async def test_full_attendance_lifecycle(async_client: AsyncClient):
     # Visit 1 was 45 min (2700s), Visit 2 was 30 min (1800s) -> total 4500s (01h 15m)
     assert my_att["today"]["total_seconds"] == 4500
     assert my_att["today"]["total_formatted"] == "01h 15m"
+
+
+@pytest.mark.asyncio
+async def test_register_new_facility_short_name(async_client: AsyncClient):
+    """Test registering a new facility with short name (e.g. 'l1', 'I1') and custom coordinates."""
+    login_resp = await async_client.post("/api/v1/auth/login", json={
+        "username": "superadmin",
+        "password": "SuperAdmin@Eluru1"
+    })
+    assert login_resp.status_code == 200
+    token = login_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    create_resp = await async_client.post("/api/v1/headquarters", headers=headers, json={
+        "name": "I1",
+        "code": "AP-ELR-701",
+        "state": "Andhra Pradesh",
+        "district": "Eluru",
+        "city": "Eluru",
+        "address": "IIIT Nuzvid",
+        "latitude": 16.795184,
+        "longitude": 80.823093,
+        "radius_meters": 100.0,
+        "status": "ACTIVE",
+        "is_primary": False
+    })
+    assert create_resp.status_code == 201
+    data = create_resp.json()
+    assert data["name"] == "I1"
+    assert data["code"] == "AP-ELR-701"
+    assert data["latitude"] == 16.795184
+    assert data["longitude"] == 80.823093
