@@ -406,20 +406,20 @@ export const DashboardLayout: React.FC<Props> = ({
                       : 'text-slate-600 hover:text-[#17365D] hover:bg-slate-50/60'
                   }`}
                 >
-                  <div className="flex items-center space-x-2.5">
+                  <div className="flex items-center space-x-2.5 min-w-0">
                     <CatIcon className={`w-4 h-4 shrink-0 ${hasActiveChild ? 'text-[#2563EB]' : 'text-slate-400'}`} />
                     <span className="truncate tracking-tight">{cat.title}</span>
                   </div>
-                  <div className="flex items-center space-x-1.5">
+                  <div className="flex items-center space-x-1.5 shrink-0 ml-1">
                     {cat.badge && (
-                      <span className="px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-amber-100 text-amber-800">
+                      <span className="px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-amber-100 text-amber-800 shrink-0">
                         {cat.badge}
                       </span>
                     )}
                     {isCatOpen ? (
-                      <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                      <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                     ) : (
-                      <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                      <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                     )}
                   </div>
                 </button>
@@ -447,7 +447,7 @@ export const DashboardLayout: React.FC<Props> = ({
                               : 'text-[#64748B] hover:text-[#17365D] hover:bg-slate-50'
                           }`}
                         >
-                          <div className="flex items-center space-x-2.5 truncate">
+                          <div className="flex items-center space-x-2.5 min-w-0 truncate">
                             <SubIcon
                               className={`w-3.5 h-3.5 shrink-0 ${
                                 isSubActive
@@ -459,7 +459,7 @@ export const DashboardLayout: React.FC<Props> = ({
                           </div>
 
                           {subItem.badge && (
-                            <span className="px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                            <span className="px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200 shrink-0 ml-1">
                               {subItem.badge}
                             </span>
                           )}

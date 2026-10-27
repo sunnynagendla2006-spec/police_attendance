@@ -343,7 +343,7 @@ export const GeofenceSettings: React.FC = () => {
 
       {/* Confirmation Modal */}
       {showConfirmModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[9999] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-xl max-w-md w-full border border-slate-200 shadow-2xl p-6">
             <div className="flex items-center space-x-3 text-amber-600 mb-3">
               <div className="p-2 bg-amber-50 rounded-full">

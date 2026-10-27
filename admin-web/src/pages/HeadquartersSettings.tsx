@@ -935,12 +935,14 @@ export const HeadquartersSettings: React.FC = () => {
             </div>
 
             {/* Selection Methods Legend in bottom-left */}
-            <div className="absolute bottom-3 left-3 z-[400] bg-white/95 backdrop-blur-md border border-[#E2E8F0] rounded-xl px-3 py-2 shadow-md text-[11px] text-slate-600 space-y-1">
-              <span className="font-bold text-[#172B4D] block uppercase tracking-wider text-[10px]">3 Selection Methods:</span>
-              <div><strong className="text-slate-800">Method A:</strong> Enter Lat/Lng and click Preview</div>
-              <div><strong className="text-slate-800">Method B:</strong> Click map or drag the shield marker</div>
-              <div><strong className="text-slate-800">Method C:</strong> Search address/place bar above</div>
-            </div>
+            {!showConfirmModal && !showHistoryModal && (
+              <div className="absolute bottom-3 left-3 z-[20] bg-white/95 backdrop-blur-md border border-[#E2E8F0] rounded-xl px-3 py-2 shadow-md text-[11px] text-slate-600 space-y-1">
+                <span className="font-bold text-[#172B4D] block uppercase tracking-wider text-[10px]">3 Selection Methods:</span>
+                <div><strong className="text-slate-800">Method A:</strong> Enter Lat/Lng and click Preview</div>
+                <div><strong className="text-slate-800">Method B:</strong> Click map or drag the shield marker</div>
+                <div><strong className="text-slate-800">Method C:</strong> Search address/place bar above</div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1105,7 +1107,7 @@ export const HeadquartersSettings: React.FC = () => {
 
       {/* Confirmation Modal — Section 6 Requirement */}
       {showConfirmModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
           <div className="bg-white border border-[#E2E8F0] rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in duration-200">
             {/* Modal Header */}
             <div className="px-6 py-4 bg-amber-500 text-white flex items-center justify-between">
@@ -1228,7 +1230,7 @@ export const HeadquartersSettings: React.FC = () => {
 
       {/* History Drawer / Modal */}
       {showHistoryModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
           <div className="bg-white border border-[#E2E8F0] rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] flex flex-col overflow-hidden">
             <div className="px-6 py-4 border-b border-[#E2E8F0] flex items-center justify-between bg-slate-50">
               <div className="flex items-center space-x-2">
