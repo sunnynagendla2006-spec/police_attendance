@@ -15,10 +15,13 @@ from app.services.geofence_engine import get_active_geofence_config
 
 logger = logging.getLogger(__name__)
 
-async def compute_overview_stats(db: AsyncIOMotorDatabase) -> OverviewStats:
+async def compute_overview_stats(
+    db: AsyncIOMotorDatabase,
+    location_id: Optional[str] = None
+) -> OverviewStats:
     """
     Compute real-time headquarters operational metrics based exclusively
-    on MongoDB attendance and location records.
+    on MongoDB attendance, location, and duty assignment records.
     """
     now = datetime.now(timezone.utc)
     start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -26,17 +29,59 @@ async def compute_overview_stats(db: AsyncIOMotorDatabase) -> OverviewStats:
     hq_config = await get_active_geofence_config(db)
     stale_thresh = hq_config["stale_threshold_seconds"]
 
-    # 1. Total registered active officers
-    reg_count = await db.officer_profiles.count_documents({"profile_status": "ACTIVE"})
+    # 1. Total & Active Headquarters Locations
+    total_locations = await db.headquarters.count_documents({})
+    active_locations = await db.headquarters.count_documents({"status": "ACTIVE"})
 
-    # 2. Get latest location observation per officer
+    # 2. Duty Assignments & Personnel Scoping
+    all_facilities = await db.headquarters.find({}).to_list(length=300)
+    facility_map = {str(f["_id"]): f for f in all_facilities}
+
+    all_active_asgns = await db.location_assignments.find({"status": "ACTIVE"}).to_list(length=2000)
+    # Deduplicate constables to avoid double counting across historical reassignments
+    assigned_user_id_set = set(str(a["user_id"]) for a in all_active_asgns if a.get("user_id"))
+    assigned_officer_id_set = set(str(a["officer_id"]) for a in all_active_asgns if a.get("officer_id"))
+
+    # Map constable to active assigned facility
+    constable_to_facility: Dict[str, Dict[str, Any]] = {}
+    for a in all_active_asgns:
+        loc_id = str(a.get("location_id", ""))
+        fac = facility_map.get(loc_id)
+        if a.get("user_id"):
+            constable_to_facility[str(a["user_id"])] = {
+                "facility": fac,
+                "radius": float(fac.get("radius_meters", a.get("geofence_radius_meters", 100.0))) if fac else float(a.get("geofence_radius_meters", 100.0)),
+                "location_id": loc_id
+            }
+
+    # 3. Constables selection (filter by location_id if specified)
+    if location_id:
+        profiles_cursor = db.officer_profiles.find({"profile_status": "ACTIVE"})
+        all_active_profiles = await profiles_cursor.to_list(length=1000)
+        profiles = [
+            p for p in all_active_profiles
+            if constable_to_facility.get(str(p["user_id"]), {}).get("location_id") == str(location_id)
+        ]
+        reg_count = len(profiles)
+        assigned_count = reg_count
+        unassigned_count = 0
+    else:
+        profiles_cursor = db.officer_profiles.find({"profile_status": "ACTIVE"})
+        profiles = await profiles_cursor.to_list(length=1000)
+        reg_count = len(profiles)
+        assigned_count = len(assigned_user_id_set)
+        unassigned_count = max(0, reg_count - assigned_count)
+
+    # 4. Evaluate Observation Freshness & Geofence Status
     inside_count = 0
     outside_count = 0
     stale_count = 0
+    location_available_count = 0
 
-    profiles = await db.officer_profiles.find({"profile_status": "ACTIVE"}).to_list(length=1000)
+    from app.services.geofence_engine import calculate_haversine_distance_meters
+
     for p in profiles:
-        user_id = p["user_id"]
+        user_id = str(p["user_id"])
         last_obs = await db.location_observations.find_one(
             {"user_id": user_id},
             sort=[("observed_at", -1)]
@@ -48,19 +93,40 @@ async def compute_overview_stats(db: AsyncIOMotorDatabase) -> OverviewStats:
         obs_time = last_obs.get("observed_at")
         if obs_time and obs_time.tzinfo is None:
             obs_time = obs_time.replace(tzinfo=timezone.utc)
-        
-        diff_sec = (now - obs_time).total_seconds() if obs_time else 999999
-        if diff_sec > stale_thresh:
-            stale_count += 1
-        elif last_obs.get("is_inside_geofence", False):
-            inside_count += 1
-        else:
-            outside_count += 1
 
-    # 3. Visits today
-    today_visits_cursor = db.attendance_visits.find({
-        "entry_at": {"$gte": start_of_today}
-    })
+        diff_sec = (now - obs_time).total_seconds() if obs_time else 999999
+        is_stale = (diff_sec > stale_thresh)
+
+        if is_stale:
+            stale_count += 1
+        else:
+            location_available_count += 1
+            # Check against assigned facility (or HQ fallback)
+            asgn_info = constable_to_facility.get(user_id)
+            fac = asgn_info["facility"] if asgn_info else None
+            radius = asgn_info["radius"] if asgn_info else hq_config["radius_meters"]
+
+            coords = last_obs.get("location", {}).get("coordinates", [None, None])
+            if coords and coords[0] is not None and coords[1] is not None and fac:
+                fac_coords = fac.get("location", {}).get("coordinates", [fac.get("longitude"), fac.get("latitude")])
+                fac_lat = fac_coords[1] if len(fac_coords) > 1 else fac.get("latitude", hq_config["latitude"])
+                fac_lon = fac_coords[0] if len(fac_coords) > 0 else fac.get("longitude", hq_config["longitude"])
+                dist = calculate_haversine_distance_meters(coords[1], coords[0], fac_lat, fac_lon)
+                if dist <= radius:
+                    inside_count += 1
+                else:
+                    outside_count += 1
+            elif last_obs.get("is_inside_geofence", False):
+                inside_count += 1
+            else:
+                outside_count += 1
+
+    # 5. Visits today
+    visit_query: Dict[str, Any] = {"entry_at": {"$gte": start_of_today}}
+    if location_id:
+        visit_query["headquarters_id"] = str(location_id)
+
+    today_visits_cursor = db.attendance_visits.find(visit_query)
     today_visits = await today_visits_cursor.to_list(length=2000)
 
     total_seconds = 0
@@ -88,30 +154,34 @@ async def compute_overview_stats(db: AsyncIOMotorDatabase) -> OverviewStats:
     not_recorded = max(0, reg_count - officers_on_duty)
     compliance_pct = round((officers_on_duty / reg_count * 100) if reg_count > 0 else 0.0, 1)
 
-    # 4. Organization-wide Multi-Location & Duty Metrics
+    # 6. Admin and Audit Metrics
     admin_count = await db.users.count_documents({"role": {"$in": ["super_admin", "hq_admin", "admin"]}})
-    active_locs_count = await db.headquarters.count_documents({"status": "ACTIVE"})
-    assigned_duty_count = await db.location_assignments.count_documents({"status": "ACTIVE"})
-    location_avail_count = inside_count + outside_count
-
     today_str = now.strftime("%Y-%m-%d")
     sched_rep_count = await db.scheduled_reports.count_documents({"reporting_date": today_str})
     device_alerts = await db.audit_logs.count_documents({"action": {"$regex": "UNAUTHORIZED_DEVICE|DEVICE_REVOKED"}})
     app_usage_count = await db.app_usage_summaries.count_documents({"reporting_date": today_str})
 
-    # 5. Yesterday's comparisons
-    yest_visits = await db.attendance_visits.find({
-        "entry_at": {"$gte": start_of_yesterday, "$lt": start_of_today}
-    }).to_list(length=1000)
+    # 7. Yesterday's comparisons
+    yest_visit_query: Dict[str, Any] = {"entry_at": {"$gte": start_of_yesterday, "$lt": start_of_today}}
+    if location_id:
+        yest_visit_query["headquarters_id"] = str(location_id)
+    yest_visits = await db.attendance_visits.find(yest_visit_query).to_list(length=1000)
     yest_on_duty_count = len(set(v.get("officer_id") for v in yest_visits if v.get("officer_id")))
     yest_compliance_pct = round((yest_on_duty_count / reg_count * 100) if reg_count > 0 else 0.0, 1)
 
     return OverviewStats(
         registered_officers=reg_count,
         registered_admins=admin_count,
-        active_locations_count=active_locs_count,
-        assigned_to_duty=assigned_duty_count,
-        location_available=location_avail_count,
+        total_registered_locations=total_locations,
+        active_locations_count=active_locations,
+        assigned_to_duty=assigned_count,
+        assigned_constables_count=assigned_count,
+        unassigned_constables_count=unassigned_count,
+        location_available=location_available_count,
+        personnel_with_location=location_available_count,
+        personnel_inside_assigned_geofence=inside_count,
+        personnel_outside_assigned_geofence=outside_count,
+        personnel_stale_or_unavailable=stale_count,
         officers_inside_hq=inside_count,
         officers_outside_hq=outside_count,
         officers_on_duty_today=officers_on_duty,

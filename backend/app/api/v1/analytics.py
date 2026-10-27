@@ -15,11 +15,12 @@ router = APIRouter(prefix="/analytics", tags=["Headquarters Analytics"])
 
 @router.get("/overview", response_model=OverviewStats)
 async def get_overview(
-    admin_user: Dict[str, Any] = Depends(require_roles(["super_admin", "hq_admin"])),
+    location_id: Optional[str] = Query(None, description="Optional facility ID to filter operational statistics"),
+    admin_user: Dict[str, Any] = Depends(require_roles(["super_admin", "hq_admin", "admin"])),
     db: AsyncIOMotorDatabase = Depends(get_database)
 ):
-    """Retrieve top-level dashboard metrics for Eluru Headquarters."""
-    return await compute_overview_stats(db)
+    """Retrieve top-level dashboard metrics with optional facility filtering."""
+    return await compute_overview_stats(db, location_id=location_id)
 
 @router.get("/daily", response_model=List[DailyTrendItem])
 async def get_daily(

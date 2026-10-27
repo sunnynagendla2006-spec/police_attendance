@@ -20,7 +20,7 @@ from app.services.websocket_manager import ws_manager
 
 logger = logging.getLogger(__name__)
 
-def _format_hq_doc(hq: Dict[str, Any], cfg: Optional[Dict[str, Any]] = None) -> HeadquartersResponse:
+def _format_hq_doc(hq: Dict[str, Any], cfg: Optional[Dict[str, Any]] = None, constables_count: int = 0) -> HeadquartersResponse:
     coords = hq.get("location", {}).get("coordinates", [settings.DEFAULT_HQ_LONGITUDE, settings.DEFAULT_HQ_LATITUDE])
     radius = cfg.get("radius_meters") if cfg else hq.get("radius_meters", settings.DEFAULT_GEOFENCE_RADIUS_METERS)
     if radius is None:
@@ -38,7 +38,9 @@ def _format_hq_doc(hq: Dict[str, Any], cfg: Optional[Dict[str, Any]] = None) -> 
         longitude=coords[0],
         radius_meters=float(radius),
         status=hq.get("status", "ACTIVE"),
-        is_primary=hq.get("is_primary", True),
+        is_primary=hq.get("is_primary", False),
+        assigned_admin_ids=[str(a) for a in hq.get("assigned_admin_ids", [])],
+        assigned_constables_count=constables_count,
         description=hq.get("description"),
         created_at=hq.get("created_at", datetime.now(timezone.utc)),
         updated_at=hq.get("updated_at", datetime.now(timezone.utc))
@@ -63,7 +65,11 @@ async def get_active_headquarters(db: AsyncIOMotorDatabase) -> HeadquartersRespo
         {"headquarters_id": str(hq["_id"])},
         sort=[("created_at", -1)]
     )
-    return _format_hq_doc(hq, cfg)
+    constables_count = await db.location_assignments.count_documents({
+        "location_id": str(hq["_id"]),
+        "status": "ACTIVE"
+    })
+    return _format_hq_doc(hq, cfg, constables_count=constables_count)
 
 async def get_headquarters_info(db: AsyncIOMotorDatabase) -> HeadquartersResponse:
     """Alias for active primary headquarters."""
@@ -72,20 +78,37 @@ async def get_headquarters_info(db: AsyncIOMotorDatabase) -> HeadquartersRespons
 async def get_all_headquarters(
     db: AsyncIOMotorDatabase,
     search: Optional[str] = None,
-    status_filter: Optional[str] = None
+    status_filter: Optional[str] = None,
+    current_user: Optional[Dict[str, Any]] = None
 ) -> List[HeadquartersResponse]:
-    """Retrieve all headquarters facilities with optional search and status filter."""
+    """Retrieve all headquarters facilities with assigned constable counts and optional search and status filter."""
+    from app.services.auth_service import get_permitted_location_ids
+    permitted_locs = None
+    if current_user:
+        permitted_locs = await get_permitted_location_ids(current_user, db)
+
     query: Dict[str, Any] = {}
+    if permitted_locs is not None:
+        valid_oids = [ObjectId(x) for x in permitted_locs if ObjectId.is_valid(x)]
+        query["$or"] = [
+            {"_id": {"$in": valid_oids}},
+            {"_id": {"$in": permitted_locs}}
+        ]
+
     if status_filter and status_filter.upper() != "ALL":
         query["status"] = status_filter.upper()
     if search and search.strip():
         q_term = search.strip()
-        query["$or"] = [
+        search_or = [
             {"name": {"$regex": q_term, "$options": "i"}},
             {"code": {"$regex": q_term, "$options": "i"}},
             {"address": {"$regex": q_term, "$options": "i"}},
             {"district": {"$regex": q_term, "$options": "i"}}
         ]
+        if "$or" in query:
+            query = {"$and": [query, {"$or": search_or}]}
+        else:
+            query["$or"] = search_or
 
     cursor = db.headquarters.find(query).sort([("is_primary", -1), ("updated_at", -1)])
     docs = await cursor.to_list(length=100)
@@ -96,25 +119,52 @@ async def get_all_headquarters(
             {"headquarters_id": str(d["_id"])},
             sort=[("created_at", -1)]
         )
-        results.append(_format_hq_doc(d, cfg))
+        constables_count = await db.location_assignments.count_documents({
+            "location_id": str(d["_id"]),
+            "status": "ACTIVE"
+        })
+        results.append(_format_hq_doc(d, cfg, constables_count=constables_count))
     return results
 
 async def get_headquarters_by_id(db: AsyncIOMotorDatabase, hq_id: str) -> HeadquartersResponse:
     """Retrieve specific headquarters facility by ID."""
     try:
-        oid = ObjectId(hq_id)
+        oid = ObjectId(hq_id) if ObjectId.is_valid(hq_id) else hq_id
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid headquarters ID format.")
 
     hq = await db.headquarters.find_one({"_id": oid})
     if not hq:
+        hq = await db.headquarters.find_one({"_id": str(hq_id)})
+    if not hq:
         raise HTTPException(status_code=404, detail="Headquarters facility not found.")
 
     cfg = await db.geofence_configurations.find_one(
-        {"headquarters_id": hq_id},
+        {"headquarters_id": str(hq["_id"])},
         sort=[("created_at", -1)]
     )
-    return _format_hq_doc(hq, cfg)
+    constables_count = await db.location_assignments.count_documents({
+        "location_id": str(hq["_id"]),
+        "status": "ACTIVE"
+    })
+    return _format_hq_doc(hq, cfg, constables_count=constables_count)
+
+async def get_headquarters_personnel(
+    db: AsyncIOMotorDatabase,
+    hq_id: str,
+    admin_user: Dict[str, Any]
+) -> List[Any]:
+    """Retrieve active personnel assignments for specified headquarters facility."""
+    from app.services.auth_service import verify_location_access
+    from app.services.assignment_service import _format_assignment
+    await verify_location_access(admin_user, hq_id, db)
+
+    cursor = db.location_assignments.find({
+        "location_id": str(hq_id),
+        "status": "ACTIVE"
+    }).sort([("created_at", -1)])
+    asgns = await cursor.to_list(length=300)
+    return [_format_assignment(a) for a in asgns]
 
 async def create_headquarters(
     db: AsyncIOMotorDatabase,

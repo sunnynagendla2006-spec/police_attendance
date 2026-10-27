@@ -18,6 +18,7 @@ from app.services.headquarters_service import (
     get_active_headquarters,
     get_all_headquarters,
     get_headquarters_by_id,
+    get_headquarters_personnel,
     create_headquarters,
     update_headquarters,
     set_primary_headquarters,
@@ -50,11 +51,11 @@ async def get_active_hq(
 async def list_facilities(
     search: Optional[str] = Query(None, description="Search by name, code, district, or address"),
     status: Optional[str] = Query(None, description="Filter by status: ACTIVE, INACTIVE, MAINTENANCE, ALL"),
-    current_user: Dict[str, Any] = Depends(require_roles(["super_admin", "hq_admin"])),
+    current_user: Dict[str, Any] = Depends(require_roles(["super_admin", "hq_admin", "admin"])),
     db: AsyncIOMotorDatabase = Depends(get_database)
 ):
     """List all police headquarters and administrative facilities."""
-    return await get_all_headquarters(db, search=search, status_filter=status)
+    return await get_all_headquarters(db, search=search, status_filter=status, current_user=current_user)
 
 @router.get("/geofence", response_model=GeofenceConfigResponse)
 async def get_geofence(
@@ -101,6 +102,15 @@ async def get_hq_details(
 ):
     """Retrieve details for a specific headquarters facility."""
     return await get_headquarters_by_id(db=db, hq_id=headquarters_id)
+
+@router.get("/{headquarters_id}/personnel")
+async def get_hq_personnel(
+    headquarters_id: str,
+    admin_user: Dict[str, Any] = Depends(require_roles(["super_admin", "hq_admin", "admin"])),
+    db: AsyncIOMotorDatabase = Depends(get_database)
+):
+    """Retrieve all constables actively assigned to specified headquarters/facility."""
+    return await get_headquarters_personnel(db=db, hq_id=headquarters_id, admin_user=admin_user)
 
 @router.put("/{headquarters_id}", response_model=HeadquartersResponse)
 async def update_hq(

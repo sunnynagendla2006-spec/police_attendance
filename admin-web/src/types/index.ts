@@ -139,6 +139,12 @@ export interface LiveOfficerLocation {
   accuracy_meters?: number;
   current_state: 'INSIDE' | 'OUTSIDE' | 'ENTERING' | 'EXITING' | 'LOCATION_STALE' | 'PERMISSION_DENIED' | 'OFFLINE' | 'UNKNOWN';
   distance_from_hq_meters?: number;
+  assigned_location_id?: string;
+  assigned_location_name?: string;
+  assigned_location_code?: string;
+  assigned_geofence_radius?: number;
+  distance_from_assigned_location_meters?: number;
+  geofence_status?: 'INSIDE' | 'OUTSIDE' | 'STALE' | 'NO_DATA' | 'UNCERTAIN' | string;
   observed_at?: string;
   is_stale: boolean;
   seconds_since_update?: number;
@@ -199,10 +205,18 @@ export interface OverviewStats {
   incomplete_sessions_today: number;
   total_entries_today: number;
   total_exits_today: number;
-  // Multi-location & security metrics
+  // Multi-location & duty metrics
   registered_admins?: number;
+  total_locations_count?: number;
+  total_registered_locations?: number;
   active_locations_count?: number;
   assigned_to_duty?: number;
+  assigned_constables_count?: number;
+  unassigned_constables_count?: number;
+  personnel_with_location?: number;
+  personnel_inside_assigned_geofence?: number;
+  personnel_outside_assigned_geofence?: number;
+  personnel_stale_or_unavailable?: number;
   location_available?: number;
   scheduled_reports_today?: number;
   device_security_alerts?: number;
@@ -251,14 +265,27 @@ export interface FullAnalyticsData {
 
 export interface DutyAssignment {
   id: string;
-  constable_user_id: string;
-  constable_officer_id: string;
-  constable_name: string;
+  assignment_id?: string;
+  constable_user_id?: string;
+  constable_officer_id?: string;
+  constable_name?: string;
+  user_id?: string;
+  officer_id?: string;
+  full_name?: string;
+  rank?: string;
+  department?: string;
+  mobile_number?: string;
   location_id: string;
   location_name: string;
-  start_date: string;
+  location_code?: string;
+  geofence_radius_meters?: number;
+  duty_title?: string;
+  duty_description?: string | null;
+  start_date?: string;
   end_date?: string | null;
-  status: 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
+  start_time?: string;
+  end_time?: string | null;
+  status: 'ACTIVE' | 'COMPLETED' | 'CANCELLED' | 'REVOKED';
   assigned_by_user_id: string;
   assigned_by_username: string;
   notes?: string | null;

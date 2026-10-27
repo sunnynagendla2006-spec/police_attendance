@@ -36,6 +36,12 @@ class OfficerLiveLocation(BaseModel):
     accuracy_meters: Optional[float] = None
     current_state: str  # INSIDE, OUTSIDE, ENTERING, EXITING, LOCATION_STALE, PERMISSION_DENIED, OFFLINE, UNKNOWN
     distance_from_hq_meters: Optional[float] = None
+    assigned_location_id: Optional[str] = None
+    assigned_location_name: Optional[str] = None
+    assigned_location_code: Optional[str] = None
+    assigned_geofence_radius: Optional[float] = None
+    distance_from_assigned_location_meters: Optional[float] = None
+    geofence_status: Optional[str] = None
     observed_at: Optional[datetime] = None
     is_stale: bool = False
     seconds_since_update: Optional[int] = None

@@ -194,6 +194,10 @@ class ApiService {
     return this.request<Headquarters>(`/headquarters/${id}`);
   }
 
+  async getHeadquartersPersonnel(id: string): Promise<DutyAssignment[]> {
+    return this.request<DutyAssignment[]>(`/headquarters/${id}/personnel`);
+  }
+
   async createHeadquarters(data: HeadquartersCreatePayload): Promise<Headquarters> {
     return this.request<Headquarters>('/headquarters', {
       method: 'POST',
@@ -287,8 +291,9 @@ class ApiService {
   }
 
   // --- Analytics ---
-  async getOverviewStats(): Promise<OverviewStats> {
-    return this.request<OverviewStats>('/analytics/overview');
+  async getOverviewStats(location_id?: string): Promise<OverviewStats> {
+    const qs = location_id ? `?location_id=${encodeURIComponent(location_id)}` : '';
+    return this.request<OverviewStats>(`/analytics/overview${qs}`);
   }
 
   async getDailyTrends(days = 7): Promise<DailyTrendItem[]> {
@@ -346,9 +351,12 @@ class ApiService {
   }
 
   async createAssignment(data: {
-    constable_user_id: string;
+    constable_user_id?: string;
+    officer_id?: string;
     location_id: string;
-    start_date: string;
+    duty_title?: string;
+    duty_description?: string;
+    start_date?: string;
     end_date?: string;
     notes?: string;
   }): Promise<DutyAssignment> {

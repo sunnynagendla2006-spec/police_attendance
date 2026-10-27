@@ -88,16 +88,37 @@ async def create_duty_assignment(
     now = datetime.now(timezone.utc)
     user_id_str = str(profile.get("user_id", ""))
 
-    # 4. Enforce non-duplication: Reject if constable already has an ACTIVE assignment
+    # 4. Handle active assignments: Reject duplicate at same location; archive previous on reassignment to different location
     active_prev = await db.location_assignments.find_one({
         "user_id": user_id_str,
         "status": "ACTIVE"
     })
     if active_prev:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Constable '{profile.get('full_name')}' ({profile.get('officer_id')}) already has an active duty assignment at location '{active_prev.get('location_name', 'Station')}'. Please complete or cancel the existing assignment before creating a new one."
-        )
+        if str(active_prev.get("location_id")) == str(loc["_id"]):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Constable '{profile.get('full_name')}' ({profile.get('officer_id')}) already has an active duty assignment at location '{active_prev.get('location_name', 'Station')}'. Please complete or cancel the existing assignment before creating a new one."
+            )
+        else:
+            # Reassignment to a DIFFERENT location: complete previous assignment to preserve full history
+            prev_notes = active_prev.get("duty_description") or ""
+            reassign_note = f"Reassigned to {loc.get('name', 'new facility')} on {now.strftime('%Y-%m-%d %H:%M:%S UTC')}"
+            updated_notes = f"{prev_notes}\n[{reassign_note}]".strip() if prev_notes else f"[{reassign_note}]"
+            await db.location_assignments.update_one(
+                {"_id": active_prev["_id"]},
+                {
+                    "$set": {
+                        "status": "COMPLETED",
+                        "end_time": now,
+                        "updated_at": now,
+                        "duty_description": updated_notes
+                    }
+                }
+            )
+            logger.info(
+                f"Archived previous active assignment {active_prev.get('assignment_id')} for constable "
+                f"{profile.get('officer_id')} as COMPLETED upon reassignment to {loc.get('name')}."
+            )
 
     # 5. Create new assignment record
     asgn_code = f"ASN-{now.strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"

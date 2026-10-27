@@ -36,7 +36,7 @@ import {
   Pie,
   Cell
 } from 'recharts';
-import { OverviewStats, GeofenceConfig, FullAnalyticsData, RecentActivityItem } from '../types';
+import { OverviewStats, GeofenceConfig, FullAnalyticsData, RecentActivityItem, Headquarters } from '../types';
 import { api } from '../services/api';
 
 interface Props {
@@ -77,18 +77,24 @@ export const Overview: React.FC<Props> = ({ onNavigate }) => {
   const [activityPage, setActivityPage] = useState(1);
   const itemsPerPage = 8;
 
-  const fetchOverviewData = async () => {
+  const [facilities, setFacilities] = useState<Headquarters[]>([]);
+  const [selectedLocationId, setSelectedLocationId] = useState<string>('');
+
+  const fetchOverviewData = async (locId?: string) => {
     try {
-      const [statsData, geoData, fullAnalytics, recentActs] = await Promise.all([
-        api.getOverviewStats(),
+      const activeLocId = locId !== undefined ? locId : selectedLocationId;
+      const [statsData, geoData, fullAnalytics, recentActs, facs] = await Promise.all([
+        api.getOverviewStats(activeLocId || undefined),
         api.getGeofenceConfig(),
         api.getFullAnalytics(),
-        api.getRecentActivity({ limit: 40 })
+        api.getRecentActivity({ limit: 40 }),
+        api.getHeadquartersFacilities().catch(() => [])
       ]);
       setStats(statsData);
       setGeofence(geoData);
       setAnalytics(fullAnalytics);
       setActivities(recentActs);
+      setFacilities(facs || []);
     } catch (e) {
       console.error('Error loading dashboard overview data:', e);
     } finally {
@@ -288,6 +294,107 @@ export const Overview: React.FC<Props> = ({ onNavigate }) => {
             <span className="text-sm font-bold text-slate-700 font-mono">
               {geofence?.stale_threshold_seconds || 300} s
             </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Multi-Location Organization & Deployment Summary */}
+      <div className="bg-white border border-[#E2E8F0] rounded-xl p-5 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 gap-3">
+          <div className="flex items-center space-x-2">
+            <Building2 className="w-5 h-5 text-[#2563EB]" />
+            <div>
+              <h2 className="font-bold text-sm text-[#172B4D]">Multi-Location Duty & Workforce Distribution</h2>
+              <p className="text-[11px] text-[#64748B]">Real-time synchronization across all configured police facilities</p>
+            </div>
+          </div>
+
+          {/* Location Filter Dropdown */}
+          <div className="flex items-center space-x-2">
+            <span className="text-xs font-semibold text-slate-600">Location Scope:</span>
+            <select
+              value={selectedLocationId}
+              onChange={(e) => {
+                const newLocId = e.target.value;
+                setSelectedLocationId(newLocId);
+                fetchOverviewData(newLocId);
+              }}
+              className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-[#17365D] focus:outline-none focus:ring-1 focus:ring-[#17365D]"
+            >
+              <option value="">All Registered Facilities (Aggregate)</option>
+              {facilities.map((fac) => (
+                <option key={fac.id} value={fac.id}>
+                  {fac.name} ({fac.code}) {fac.is_primary ? '★ Primary HQ' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* 8 Multi-Location Metrics Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 mt-4 text-xs">
+          <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
+            <span className="text-[10px] text-slate-500 font-bold uppercase block">Total Facilities</span>
+            <span className="text-lg font-bold text-[#17365D] mt-0.5 block">
+              {stats.total_registered_locations || facilities.length || 1}
+            </span>
+            <span className="text-[9px] text-slate-400">Registered</span>
+          </div>
+
+          <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
+            <span className="text-[10px] text-emerald-700 font-bold uppercase block">Active Facilities</span>
+            <span className="text-lg font-bold text-emerald-700 mt-0.5 block">
+              {stats.active_locations_count || facilities.filter(f => f.status === 'ACTIVE').length || 1}
+            </span>
+            <span className="text-[9px] text-emerald-600">Operational</span>
+          </div>
+
+          <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
+            <span className="text-[10px] text-slate-500 font-bold uppercase block">Total Constables</span>
+            <span className="text-lg font-bold text-[#172B4D] mt-0.5 block">
+              {stats.registered_officers}
+            </span>
+            <span className="text-[9px] text-slate-400">In Directory</span>
+          </div>
+
+          <div className="p-3 bg-blue-50/60 rounded-lg border border-blue-100">
+            <span className="text-[10px] text-blue-700 font-bold uppercase block">Assigned</span>
+            <span className="text-lg font-bold text-blue-700 mt-0.5 block">
+              {stats.assigned_constables_count ?? stats.assigned_to_duty ?? 0}
+            </span>
+            <span className="text-[9px] text-blue-600">On Active Duty Post</span>
+          </div>
+
+          <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
+            <span className="text-[10px] text-slate-500 font-bold uppercase block">Unassigned</span>
+            <span className="text-lg font-bold text-slate-700 mt-0.5 block">
+              {stats.unassigned_constables_count ?? Math.max(0, stats.registered_officers - (stats.assigned_constables_count || 0))}
+            </span>
+            <span className="text-[9px] text-slate-400">Awaiting Post</span>
+          </div>
+
+          <div className="p-3 bg-emerald-50/60 rounded-lg border border-emerald-100">
+            <span className="text-[10px] text-emerald-700 font-bold uppercase block">Inside Geofence</span>
+            <span className="text-lg font-bold text-emerald-700 mt-0.5 block">
+              {stats.personnel_inside_assigned_geofence ?? stats.officers_inside_hq}
+            </span>
+            <span className="text-[9px] text-emerald-600">At Assigned Post</span>
+          </div>
+
+          <div className="p-3 bg-rose-50/60 rounded-lg border border-rose-100">
+            <span className="text-[10px] text-rose-700 font-bold uppercase block">Outside Geofence</span>
+            <span className="text-lg font-bold text-rose-700 mt-0.5 block">
+              {stats.personnel_outside_assigned_geofence ?? stats.officers_outside_hq}
+            </span>
+            <span className="text-[9px] text-rose-600">Beyond Perimeter</span>
+          </div>
+
+          <div className="p-3 bg-amber-50/60 rounded-lg border border-amber-100">
+            <span className="text-[10px] text-amber-700 font-bold uppercase block">Stale / Offline</span>
+            <span className="text-lg font-bold text-amber-700 mt-0.5 block">
+              {stats.personnel_stale_or_unavailable ?? stats.officers_stale_or_unavailable}
+            </span>
+            <span className="text-[9px] text-amber-600">Pending GPS sync</span>
           </div>
         </div>
       </div>
