@@ -24,9 +24,20 @@ import { DeviceManagement } from './pages/DeviceManagement';
 import { AppUsageSummaryPage } from './pages/AppUsageSummary';
 
 export const App: React.FC = () => {
-  const [currentUser, setCurrentUser] = useState<User | null>(api.getCurrentUser());
-  const [currentTab, setCurrentTab] = useState<string>('dashboard');
+  const [currentUser, setCurrentUser] = useState<User | null>(() => api.getCurrentUser());
+  const [currentTab, setCurrentTab] = useState<string>(() => {
+    return sessionStorage.getItem('policehq_active_tab') || 'dashboard';
+  });
   const [selectedMapOfficerId, setSelectedMapOfficerId] = useState<string | undefined>(undefined);
+
+  const handleTabChange = (tab: string) => {
+    setCurrentTab(tab);
+    try {
+      sessionStorage.setItem('policehq_active_tab', tab);
+    } catch {
+      // ignore
+    }
+  };
 
   useEffect(() => {
     // Listen for auth logout or error events
@@ -45,7 +56,8 @@ export const App: React.FC = () => {
   const handleLoginSuccess = () => {
     const user = api.getCurrentUser();
     setCurrentUser(user);
-    setCurrentTab('dashboard');
+    const savedTab = sessionStorage.getItem('policehq_active_tab') || 'dashboard';
+    setCurrentTab(savedTab);
   };
 
   const handleLogout = () => {
@@ -59,14 +71,14 @@ export const App: React.FC = () => {
 
   const navigateToMap = (officerId?: string) => {
     setSelectedMapOfficerId(officerId);
-    setCurrentTab('live-map');
+    handleTabChange('live-map');
   };
 
   const renderContent = () => {
     switch (currentTab) {
       case 'dashboard':
       case 'overview':
-        return <Overview onNavigate={(tab) => setCurrentTab(tab)} />;
+        return <Overview onNavigate={(tab) => handleTabChange(tab)} />;
       case 'live-map':
         return <LiveMap targetOfficerId={selectedMapOfficerId} />;
       case 'duty-assignments':
@@ -108,14 +120,14 @@ export const App: React.FC = () => {
       case 'account-security':
         return <AccountSecurity currentUser={currentUser} />;
       default:
-        return <Overview onNavigate={(tab) => setCurrentTab(tab)} />;
+        return <Overview onNavigate={(tab) => handleTabChange(tab)} />;
     }
   };
 
   return (
     <DashboardLayout
       currentTab={currentTab}
-      setCurrentTab={setCurrentTab}
+      setCurrentTab={handleTabChange}
       currentUser={currentUser}
       onLogout={handleLogout}
     >

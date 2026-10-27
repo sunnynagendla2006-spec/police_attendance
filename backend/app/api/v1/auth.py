@@ -190,7 +190,12 @@ async def refresh_token(req: RefreshTokenRequest, db: AsyncIOMotorDatabase = Dep
         "must_change_password": user.get("must_change_password", False)
     }
     new_access_token = create_access_token(token_data)
-    return {"access_token": new_access_token, "token_type": "bearer"}
+    new_refresh_token = create_refresh_token(token_data)
+    return {
+        "access_token": new_access_token,
+        "refresh_token": new_refresh_token,
+        "token_type": "bearer"
+    }
 
 @router.get("/me", response_model=UserResponse)
 async def get_me(

@@ -41,8 +41,65 @@ const getApiBase = (): string => {
 export const API_BASE = getApiBase();
 
 class ApiService {
-  private getHeaders(): HeadersInit {
-    const token = localStorage.getItem('policehq_access_token');
+  private refreshPromise: Promise<string | null> | null = null;
+
+  private isTokenExpired(token: string | null): boolean {
+    if (!token) return true;
+    try {
+      const parts = token.split('.');
+      if (parts.length !== 3) return false;
+      const payload = JSON.parse(atob(parts[1]));
+      if (!payload.exp) return false;
+      // Mark as expired if within 30 seconds of expiration
+      return Date.now() >= (payload.exp * 1000) - 30000;
+    } catch {
+      return false;
+    }
+  }
+
+  async refreshAccessToken(): Promise<string | null> {
+    if (this.refreshPromise) {
+      return this.refreshPromise;
+    }
+
+    const refreshToken = localStorage.getItem('policehq_refresh_token');
+    if (!refreshToken) {
+      return null;
+    }
+
+    this.refreshPromise = (async () => {
+      try {
+        const response = await fetch(`${API_BASE}/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: refreshToken })
+        });
+
+        if (!response.ok) {
+          throw new Error('Refresh rejected');
+        }
+
+        const data = await response.json();
+        if (data.access_token) {
+          localStorage.setItem('policehq_access_token', data.access_token);
+          if (data.refresh_token) {
+            localStorage.setItem('policehq_refresh_token', data.refresh_token);
+          }
+          return data.access_token;
+        }
+        return null;
+      } catch {
+        return null;
+      } finally {
+        this.refreshPromise = null;
+      }
+    })();
+
+    return this.refreshPromise;
+  }
+
+  private getHeaders(tokenOverride?: string): HeadersInit {
+    const token = tokenOverride || localStorage.getItem('policehq_access_token');
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
@@ -53,17 +110,45 @@ class ApiService {
   }
 
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    const isAuthEndpoint = endpoint.startsWith('/auth/login') || endpoint.startsWith('/auth/refresh');
+
+    // Proactively refresh expired token before executing authenticated calls
+    if (!isAuthEndpoint) {
+      const currentToken = localStorage.getItem('policehq_access_token');
+      if (this.isTokenExpired(currentToken)) {
+        await this.refreshAccessToken();
+      }
+    }
+
     const url = `${API_BASE}${endpoint}`;
-    const headers = { ...this.getHeaders(), ...(options.headers || {}) };
+    let headers = { ...this.getHeaders(), ...(options.headers || {}) };
 
-    const response = await fetch(url, { ...options, headers });
+    let response = await fetch(url, { ...options, headers });
 
+    // Handle 401 Unauthorized
     if (response.status === 401) {
-      // Clear token on authentication failure
-      localStorage.removeItem('policehq_access_token');
-      localStorage.removeItem('policehq_user');
-      window.dispatchEvent(new Event('policehq_auth_error'));
-      throw new Error('Unauthorized or expired session');
+      if (!isAuthEndpoint) {
+        // Attempt token refresh and retry original request once
+        const newToken = await this.refreshAccessToken();
+        if (newToken) {
+          headers = {
+            ...headers,
+            'Authorization': `Bearer ${newToken}`
+          };
+          response = await fetch(url, { ...options, headers });
+        }
+      }
+
+      // If still 401 after retry or if on auth endpoint
+      if (response.status === 401) {
+        if (!isAuthEndpoint) {
+          localStorage.removeItem('policehq_access_token');
+          localStorage.removeItem('policehq_refresh_token');
+          localStorage.removeItem('policehq_user');
+          window.dispatchEvent(new Event('policehq_auth_error'));
+        }
+        throw new Error('Unauthorized or expired session');
+      }
     }
 
     if (!response.ok) {
@@ -104,19 +189,33 @@ class ApiService {
       body: JSON.stringify({ username, password })
     });
     localStorage.setItem('policehq_access_token', data.access_token);
+    if (data.refresh_token) {
+      localStorage.setItem('policehq_refresh_token', data.refresh_token);
+    }
     localStorage.setItem('policehq_user', JSON.stringify(data.user));
     return data;
   }
 
   logout() {
     localStorage.removeItem('policehq_access_token');
+    localStorage.removeItem('policehq_refresh_token');
     localStorage.removeItem('policehq_user');
+    sessionStorage.removeItem('policehq_active_tab');
     window.dispatchEvent(new Event('policehq_auth_logout'));
   }
 
   getCurrentUser(): User | null {
-    const stored = localStorage.getItem('policehq_user');
-    return stored ? JSON.parse(stored) : null;
+    const userStr = localStorage.getItem('policehq_user');
+    const token = localStorage.getItem('policehq_access_token');
+    const refreshToken = localStorage.getItem('policehq_refresh_token');
+    if (!userStr || (!token && !refreshToken)) {
+      return null;
+    }
+    try {
+      return JSON.parse(userStr);
+    } catch {
+      return null;
+    }
   }
 
   async getMe(): Promise<User> {
