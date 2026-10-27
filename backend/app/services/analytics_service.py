@@ -31,7 +31,9 @@ async def compute_overview_stats(
 
     # 1. Total & Active Headquarters Locations
     total_locations = await db.headquarters.count_documents({})
-    active_locations = await db.headquarters.count_documents({"status": "ACTIVE"})
+    active_locations = await db.headquarters.count_documents({
+        "$or": [{"status": "ACTIVE"}, {"status": {"$exists": False}}, {"status": None}]
+    })
 
     # 2. Duty Assignments & Personnel Scoping
     all_facilities = await db.headquarters.find({}).to_list(length=300)
@@ -280,7 +282,7 @@ async def get_full_analytics(db: AsyncIOMotorDatabase) -> AnalyticsResponse:
 
     # Station summaries
     station_summaries = []
-    for dept_name, officer_ids in stations.items():
+    for dept_name, officer_ids in station_officers.items():
         total_in_dept = len(officer_ids)
         present_in_dept = sum(1 for oid in officer_ids if oid in present_officers_today)
         pct = round((present_in_dept / total_in_dept * 100) if total_in_dept > 0 else 0.0, 1)

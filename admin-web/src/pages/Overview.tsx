@@ -83,18 +83,35 @@ export const Overview: React.FC<Props> = ({ onNavigate }) => {
   const fetchOverviewData = async (locId?: string) => {
     try {
       const activeLocId = locId !== undefined ? locId : selectedLocationId;
-      const [statsData, geoData, fullAnalytics, recentActs, facs] = await Promise.all([
+      const [statsRes, geoRes, analyticsRes, actsRes, facsRes] = await Promise.allSettled([
         api.getOverviewStats(activeLocId || undefined),
         api.getGeofenceConfig(),
         api.getFullAnalytics(),
         api.getRecentActivity({ limit: 40 }),
-        api.getHeadquartersFacilities().catch(() => [])
+        api.getHeadquartersFacilities()
       ]);
-      setStats(statsData);
-      setGeofence(geoData);
-      setAnalytics(fullAnalytics);
-      setActivities(recentActs);
-      setFacilities(facs || []);
+
+      if (statsRes.status === 'fulfilled') {
+        setStats(statsRes.value);
+      } else {
+        console.warn('Failed to load overview stats:', statsRes.reason);
+      }
+
+      if (geoRes.status === 'fulfilled') {
+        setGeofence(geoRes.value);
+      }
+
+      if (analyticsRes.status === 'fulfilled') {
+        setAnalytics(analyticsRes.value);
+      }
+
+      if (actsRes.status === 'fulfilled') {
+        setActivities(actsRes.value || []);
+      }
+
+      if (facsRes.status === 'fulfilled') {
+        setFacilities(facsRes.value || []);
+      }
     } catch (e) {
       console.error('Error loading dashboard overview data:', e);
     } finally {
