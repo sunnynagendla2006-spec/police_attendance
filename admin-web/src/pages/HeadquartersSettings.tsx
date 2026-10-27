@@ -61,6 +61,7 @@ export const HeadquartersSettings: React.FC = () => {
   const [facilitySearch, setFacilitySearch] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [loading, setLoading] = useState<boolean>(true);
+  const [settingPrimaryId, setSettingPrimaryId] = useState<string | null>(null);
 
   // Form Fields
   const [formName, setFormName] = useState<string>('');
@@ -440,12 +441,32 @@ export const HeadquartersSettings: React.FC = () => {
 
   // Set primary facility action
   const handleSetPrimary = async (hqId: string) => {
+    setSettingPrimaryId(hqId);
+    setSaveError(null);
     try {
       await api.setPrimaryHeadquarters(hqId);
+      // Immediately reflect is_primary in local state for instant responsive UI
+      setFacilities(prev =>
+        prev.map(f => ({
+          ...f,
+          is_primary: f.id === hqId
+        }))
+      );
+      if (selectedFacility?.id === hqId) {
+        setFormIsPrimary(true);
+      } else if (selectedFacility) {
+        setFormIsPrimary(false);
+      }
       await loadFacilities();
       window.dispatchEvent(new Event('policehq_headquarters_updated'));
+      window.dispatchEvent(new Event('policehq_geofence_config_updated'));
+      window.dispatchEvent(new Event('policehq_manual_refresh'));
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err: any) {
-      alert(`Failed to set primary headquarters: ${err.message}`);
+      setSaveError(`Failed to set primary headquarters: ${err.message}`);
+    } finally {
+      setSettingPrimaryId(null);
     }
   };
 
@@ -1036,16 +1057,17 @@ export const HeadquartersSettings: React.FC = () => {
                       <td className="px-4 py-3.5">
                         {f.is_primary ? (
                           <span className="text-[11px] font-bold text-amber-600 flex items-center space-x-1">
-                            <Check className="w-3.5 h-3.5" />
+                            <Check className="w-3.5 h-3.5 text-amber-500" />
                             <span>Primary HQ</span>
                           </span>
                         ) : (
                           <button
                             type="button"
+                            disabled={settingPrimaryId === f.id}
                             onClick={() => handleSetPrimary(f.id)}
-                            className="text-[10px] font-bold text-slate-500 hover:text-[#2563EB] underline"
+                            className="text-[11px] font-bold text-[#2563EB] hover:text-[#17365D] hover:underline disabled:opacity-50 transition"
                           >
-                            Set as Primary
+                            {settingPrimaryId === f.id ? 'Setting...' : 'Set as Primary'}
                           </button>
                         )}
                       </td>

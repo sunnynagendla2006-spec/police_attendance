@@ -128,11 +128,13 @@ async def update_hq(
 @router.patch("/{headquarters_id}/primary", response_model=HeadquartersResponse)
 async def designate_primary_hq(
     headquarters_id: str,
+    change_reason: Optional[str] = Query(None, description="Reason for primary headquarters designation"),
     admin_user: Dict[str, Any] = Depends(require_roles(["super_admin", "hq_admin", "admin"])),
     db: AsyncIOMotorDatabase = Depends(get_database)
 ):
     """Set specified facility as primary operational headquarters."""
-    return await set_primary_headquarters(db=db, admin_user=admin_user, hq_id=headquarters_id)
+    reason = change_reason or "Designated as primary operational headquarters by administrator"
+    return await set_primary_headquarters(db=db, admin_user=admin_user, hq_id=headquarters_id, change_reason=reason)
 
 @router.patch("/{headquarters_id}/status", response_model=HeadquartersResponse)
 async def update_hq_status_route(

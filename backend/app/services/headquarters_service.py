@@ -412,7 +412,7 @@ async def set_primary_headquarters(
     db: AsyncIOMotorDatabase,
     admin_user: Dict[str, Any],
     hq_id: str,
-    change_reason: str
+    change_reason: str = "Designated as primary operational headquarters by administrator"
 ) -> HeadquartersResponse:
     """Designate this facility as the active primary headquarters."""
     try:
