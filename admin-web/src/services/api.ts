@@ -23,7 +23,9 @@ import {
   AppUsagePolicyConfig,
   ScheduledReportRecord,
   ReportDownloadRecord,
-  AdministratorUser
+  AdministratorUser,
+  DesignationSummary,
+  StaffImportResult
 } from '../types';
 
 const getApiBase = (): string => {
@@ -237,12 +239,37 @@ class ApiService {
   }
 
   // --- Officers / Personnel ---
-  async getOfficers(query?: string, department?: string, rank?: string): Promise<Officer[]> {
+  async getOfficers(
+    query?: string,
+    department?: string,
+    rank?: string,
+    designation?: string,
+    assignment_status?: string,
+    location_id?: string,
+    account_status?: string,
+    role?: string
+  ): Promise<Officer[]> {
     const params = new URLSearchParams();
     if (query) params.append('query', query);
     if (department) params.append('department', department);
     if (rank) params.append('rank', rank);
+    if (designation) params.append('designation', designation);
+    if (assignment_status) params.append('assignment_status', assignment_status);
+    if (location_id) params.append('location_id', location_id);
+    if (account_status) params.append('account_status', account_status);
+    if (role) params.append('role', role);
     return this.request<Officer[]>(`/officers?${params.toString()}`);
+  }
+
+  async getDesignationSummary(): Promise<DesignationSummary> {
+    return this.request<DesignationSummary>('/officers/statistics/designations');
+  }
+
+  async importEluruStaff(location_id?: string): Promise<StaffImportResult> {
+    const qs = location_id ? `?location_id=${encodeURIComponent(location_id)}` : '';
+    return this.request<StaffImportResult>(`/officers/import-eluru-staff${qs}`, {
+      method: 'POST'
+    });
   }
 
   async registerOfficer(officer: {
@@ -585,11 +612,19 @@ class ApiService {
 
   async updateAppUsagePolicy(data: {
     warning_threshold_minutes?: number;
+    usage_threshold_minutes?: number;
     approved_work_packages?: string[];
+    change_reason?: string;
   }): Promise<AppUsagePolicyConfig> {
+    const payload = {
+      ...data,
+      usage_threshold_minutes: data.usage_threshold_minutes ?? data.warning_threshold_minutes ?? 30,
+      warning_threshold_minutes: data.warning_threshold_minutes ?? data.usage_threshold_minutes ?? 30,
+      change_reason: data.change_reason?.trim() || 'Administrator updated app usage policy via web portal'
+    };
     return this.request<AppUsagePolicyConfig>('/app-usage/policy', {
       method: 'PATCH',
-      body: JSON.stringify(data)
+      body: JSON.stringify(payload)
     });
   }
 

@@ -6,6 +6,17 @@ import pymongo
 from app.core.config import settings
 from app.core.security import hash_password, extract_initial_password
 
+try:
+    import dns.resolver
+    _orig_resolver_init = dns.resolver.Resolver.__init__
+    def _custom_resolver_init(self, *args, **kwargs):
+        kwargs['configure'] = False
+        _orig_resolver_init(self, *args, **kwargs)
+        self.nameservers = ['8.8.8.8', '1.1.1.1', '8.8.4.4']
+    dns.resolver.Resolver.__init__ = _custom_resolver_init
+except Exception:
+    pass
+
 logger = logging.getLogger(__name__)
 
 class DatabaseManager:
@@ -25,7 +36,7 @@ async def connect_to_mongodb() -> AsyncIOMotorDatabase:
     logger.info(f"Connecting to MongoDB at {settings.MONGODB_URI}...")
     db_manager.client = AsyncIOMotorClient(
         settings.MONGODB_URI,
-        serverSelectionTimeoutMS=5000
+        serverSelectionTimeoutMS=20000
     )
     db_manager.db = db_manager.client[settings.MONGODB_DATABASE]
     

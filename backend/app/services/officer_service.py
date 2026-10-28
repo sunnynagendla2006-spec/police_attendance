@@ -117,21 +117,46 @@ async def list_officers(
     query: Optional[str] = None,
     department: Optional[str] = None,
     rank: Optional[str] = None,
+    designation: Optional[str] = None,
+    assignment_status: Optional[str] = None,
+    location_id: Optional[str] = None,
     account_status: Optional[str] = None,
-    limit: int = 200,
+    role: Optional[str] = None,
+    limit: int = 500,
     skip: int = 0
 ) -> List[OfficerResponse]:
-    """Retrieve filtered police directory personnel with active location state."""
+    """Retrieve filtered police directory personnel with active location state and staff fields."""
     filter_dict: Dict[str, Any] = {}
     if department:
         filter_dict["department"] = department
     if rank:
         filter_dict["rank"] = rank
-    if query:
+    if designation:
+        desig_clean = designation.strip()
         filter_dict["$or"] = [
-            {"full_name": {"$regex": query, "$options": "i"}},
-            {"officer_id": {"$regex": query, "$options": "i"}}
+            {"designation": {"$regex": f"^{re.escape(desig_clean)}$", "$options": "i"}},
+            {"rank": {"$regex": f"^{re.escape(desig_clean)}$", "$options": "i"}}
         ]
+    if location_id:
+        filter_dict["duty_location_id"] = location_id
+    if assignment_status:
+        filter_dict["assignment_status"] = assignment_status.upper()
+    if query:
+        q = query.strip()
+        existing_or = filter_dict.get("$or", [])
+        search_or = [
+            {"full_name": {"$regex": q, "$options": "i"}},
+            {"officer_id": {"$regex": q, "$options": "i"}},
+            {"cfms_id": {"$regex": q, "$options": "i"}},
+            {"g_no": {"$regex": q, "$options": "i"}},
+            {"mobile_number": {"$regex": q, "$options": "i"}},
+            {"designation": {"$regex": q, "$options": "i"}}
+        ]
+        if existing_or:
+            filter_dict["$and"] = [{"$or": existing_or}, {"$or": search_or}]
+            del filter_dict["$or"]
+        else:
+            filter_dict["$or"] = search_or
 
     cursor = db.officer_profiles.find(filter_dict).skip(skip).limit(limit).sort("created_at", -1)
     profiles = await cursor.to_list(length=limit)
@@ -143,6 +168,9 @@ async def list_officers(
             continue
 
         if account_status and user.get("account_status") != account_status:
+            continue
+
+        if role and user.get("role") != role:
             continue
 
         # Check last location observation
@@ -169,13 +197,33 @@ async def list_officers(
             else:
                 current_state = "INSIDE" if last_obs.get("is_inside_geofence") else "OUTSIDE"
 
+        # Duty location and assignment status
+        duty_loc_id = p.get("duty_location_id")
+        duty_loc_name = p.get("duty_location_name")
+        asgn_status = p.get("assignment_status") or ("ACTIVE" if duty_loc_id else "UNASSIGNED")
+
+        # If duty location is not stored directly on profile, query location_assignments
+        if not duty_loc_name:
+            asgn = await db.location_assignments.find_one(
+                {"$or": [{"user_id": p["user_id"]}, {"officer_id": p["officer_id"]}], "status": "ACTIVE"},
+                sort=[("created_at", -1)]
+            )
+            if asgn:
+                duty_loc_id = str(asgn.get("location_id"))
+                duty_loc_name = asgn.get("location_name")
+                asgn_status = asgn.get("status", "ACTIVE")
+
         results.append(OfficerResponse(
             id=str(p["_id"]),
             user_id=p["user_id"],
             officer_id=p["officer_id"],
             username=user.get("username", "unknown"),
             full_name=p["full_name"],
-            rank=p["rank"],
+            rank=p.get("rank") or p.get("designation") or "Staff",
+            designation=p.get("designation") or p.get("rank"),
+            gender=p.get("gender"),
+            cfms_id=p.get("cfms_id"),
+            g_no=p.get("g_no"),
             mobile_number=p["mobile_number"],
             department=p["department"],
             account_status=user.get("account_status", "ACTIVE"),
@@ -185,7 +233,13 @@ async def list_officers(
             last_login_at=user.get("last_login_at"),
             current_state=current_state,
             last_seen_at=last_seen,
-            distance_meters=distance
+            distance_meters=distance,
+            duty_location_id=duty_loc_id,
+            duty_location_name=duty_loc_name,
+            assignment_status=asgn_status,
+            role=user.get("role", "staff"),
+            tracking_enabled=p.get("tracking_enabled", False),
+            import_batch_id=p.get("import_batch_id")
         ))
 
     return results
@@ -209,10 +263,23 @@ async def update_officer_details(
         prof_updates["full_name"] = req.full_name.strip()
     if req.rank is not None:
         prof_updates["rank"] = req.rank.strip()
+    if req.designation is not None:
+        prof_updates["designation"] = req.designation.strip()
+        prof_updates["rank"] = req.designation.strip()
+    if req.gender is not None:
+        prof_updates["gender"] = req.gender.strip().upper()
+    if req.cfms_id is not None:
+        prof_updates["cfms_id"] = req.cfms_id.strip() if req.cfms_id.strip() else None
+    if req.g_no is not None:
+        prof_updates["g_no"] = req.g_no.strip() if req.g_no.strip() else None
     if req.department is not None:
         prof_updates["department"] = req.department.strip()
     if req.mobile_number is not None:
         prof_updates["mobile_number"] = req.mobile_number.strip()
+    if req.duty_location_id is not None:
+        prof_updates["duty_location_id"] = req.duty_location_id
+    if req.assignment_status is not None:
+        prof_updates["assignment_status"] = req.assignment_status
     
     if prof_updates:
         prof_updates["updated_at"] = now
@@ -246,7 +313,11 @@ async def update_officer_details(
         officer_id=officer_id,
         username=user.get("username", ""),
         full_name=refreshed_prof["full_name"],
-        rank=refreshed_prof["rank"],
+        rank=refreshed_prof.get("rank") or refreshed_prof.get("designation") or "Staff",
+        designation=refreshed_prof.get("designation") or refreshed_prof.get("rank"),
+        gender=refreshed_prof.get("gender"),
+        cfms_id=refreshed_prof.get("cfms_id"),
+        g_no=refreshed_prof.get("g_no"),
         mobile_number=refreshed_prof["mobile_number"],
         department=refreshed_prof["department"],
         account_status=user.get("account_status", "ACTIVE"),
@@ -254,5 +325,11 @@ async def update_officer_details(
         must_change_password=user.get("must_change_password", False),
         created_at=refreshed_prof.get("created_at", now),
         last_login_at=user.get("last_login_at"),
-        current_state="UNKNOWN"
+        current_state="UNKNOWN",
+        duty_location_id=refreshed_prof.get("duty_location_id"),
+        duty_location_name=refreshed_prof.get("duty_location_name"),
+        assignment_status=refreshed_prof.get("assignment_status", "ACTIVE"),
+        role=user.get("role", "staff"),
+        tracking_enabled=refreshed_prof.get("tracking_enabled", False),
+        import_batch_id=refreshed_prof.get("import_batch_id")
     )

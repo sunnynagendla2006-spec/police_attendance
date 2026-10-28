@@ -32,6 +32,7 @@ class AppUsageSummaryItem(BaseModel):
 class AppUsagePolicyConfig(BaseModel):
     enabled: bool = True
     usage_threshold_minutes: int = 30
+    warning_threshold_minutes: Optional[int] = None
     approved_work_packages: List[str] = [
         "com.policehq.geoattend",
         "com.google.android.apps.maps",
@@ -43,8 +44,13 @@ class AppUsagePolicyConfig(BaseModel):
     updated_at: datetime
     updated_by: str
 
+    def model_post_init(self, __context: Any) -> None:
+        if self.warning_threshold_minutes is None:
+            self.warning_threshold_minutes = self.usage_threshold_minutes
+
 class AppUsagePolicyUpdate(BaseModel):
     enabled: Optional[bool] = None
     usage_threshold_minutes: Optional[int] = Field(None, ge=5, le=360)
+    warning_threshold_minutes: Optional[int] = Field(None, ge=5, le=360)
     approved_work_packages: Optional[List[str]] = None
-    change_reason: str = Field(..., min_length=3)
+    change_reason: Optional[str] = None

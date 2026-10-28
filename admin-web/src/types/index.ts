@@ -1,4 +1,4 @@
-export type UserRole = 'super_admin' | 'hq_admin' | 'constable';
+export type UserRole = 'super_admin' | 'hq_admin' | 'constable' | 'staff' | 'admin';
 
 export interface User {
   id: string;
@@ -25,6 +25,10 @@ export interface Officer {
   username: string;
   full_name: string;
   rank: string;
+  designation?: string;
+  gender?: string;
+  cfms_id?: string | null;
+  g_no?: string | null;
   mobile_number: string;
   department: string;
   account_status: string;
@@ -35,6 +39,61 @@ export interface Officer {
   current_state: string;
   last_seen_at?: string;
   distance_meters?: number;
+  duty_location_id?: string;
+  duty_location_name?: string;
+  assignment_status?: string;
+  role?: string;
+  tracking_enabled?: boolean;
+  import_batch_id?: string;
+}
+
+export interface DesignationSummary {
+  total_staff: number;
+  counts: {
+    AO: number;
+    'Office Supdt': number;
+    'Sr.Asst': number;
+    'Jr.Asst': number;
+    'Record Asst': number;
+    Attender: number;
+    Dhobhi: number;
+    OS: number;
+    [key: string]: number;
+  };
+  location_id?: string | null;
+  location_name?: string;
+  assigned_count: number;
+  unassigned_count: number;
+}
+
+export interface StaffImportResult {
+  status: string;
+  import_batch_id: string;
+  location_id: string;
+  location_name: string;
+  location_code?: string;
+  total_records: number;
+  created_records: number;
+  matched_existing_records: number;
+  updated_records: number;
+  records_requiring_manual_review: number;
+  duty_assignments_created: number;
+  duty_assignments_existing: number;
+  review_details?: string[];
+  designation_summary: Record<string, number>;
+  processed_items: Array<{
+    sl_no: number;
+    name: string;
+    gender: string;
+    cfms_id?: string | null;
+    designation: string;
+    g_no?: string | null;
+    mobile: string;
+    officer_id: string;
+    status: string;
+    matched_by?: string | null;
+    duty_location: string;
+  }>;
 }
 
 export interface Headquarters {
@@ -381,9 +440,11 @@ export interface AppUsageSummary {
 }
 
 export interface AppUsagePolicyConfig {
-  id: string;
-  warning_threshold_minutes: number;
+  id?: string;
+  usage_threshold_minutes?: number;
+  warning_threshold_minutes?: number;
   approved_work_packages: string[];
+  enabled?: boolean;
   updated_by: string;
   updated_at: string;
 }

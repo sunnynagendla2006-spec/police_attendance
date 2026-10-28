@@ -15,7 +15,7 @@ settings.MONGODB_DATABASE = "policehq_geoattend_test"
 @pytest_asyncio.fixture(scope="function", autouse=True)
 async def setup_test_db():
     """Initialize function-scoped Motor client on the current test's event loop and clean state."""
-    client = AsyncIOMotorClient(settings.MONGODB_URI, serverSelectionTimeoutMS=5000)
+    client = AsyncIOMotorClient(settings.MONGODB_URI, serverSelectionTimeoutMS=20000)
     db = client[settings.MONGODB_DATABASE]
     db_manager.client = client
     db_manager.db = db

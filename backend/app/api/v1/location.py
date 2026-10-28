@@ -49,6 +49,12 @@ async def submit_location(
     if not profile:
         raise HTTPException(status_code=404, detail="Officer profile not found")
 
+    if profile.get("tracking_enabled") is False:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Location tracking is not enabled for this personnel account. Explicit administrator activation is required."
+        )
+
     return await process_single_observation(
         db=db,
         user=current_user,
@@ -70,6 +76,12 @@ async def sync_offline_locations(
     profile = await _find_profile_for_user(db, current_user)
     if not profile:
         raise HTTPException(status_code=404, detail="Officer profile not found")
+
+    if profile.get("tracking_enabled") is False:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Location tracking is not enabled for this personnel account. Explicit administrator activation is required."
+        )
 
     return await sync_offline_batch(
         db=db,

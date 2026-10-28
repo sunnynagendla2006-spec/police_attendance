@@ -33,11 +33,12 @@ export const AppUsageSummaryPage: React.FC = () => {
   const [showPolicyModal, setShowPolicyModal] = useState<boolean>(false);
   const [warningThreshold, setWarningThreshold] = useState<number>(30);
   const [approvedPackages, setApprovedPackages] = useState<string>('');
+  const [changeReason, setChangeReason] = useState<string>('Standard operational policy review');
   const [savingPolicy, setSavingPolicy] = useState<boolean>(false);
   const [downloading, setDownloading] = useState<'PDF' | 'CSV' | null>(null);
 
   const currentUser = api.getCurrentUser();
-  const isSuperAdmin = currentUser?.role === 'super_admin';
+  const isSuperAdmin = currentUser?.role === 'super_admin' || currentUser?.role === 'hq_admin';
 
   const loadData = async () => {
     try {
@@ -53,7 +54,8 @@ export const AppUsageSummaryPage: React.FC = () => {
       setUsageList(usageRes);
       if (policyRes) {
         setPolicy(policyRes);
-        setWarningThreshold(policyRes.warning_threshold_minutes ?? 30);
+        const threshold = policyRes.usage_threshold_minutes ?? policyRes.warning_threshold_minutes ?? 30;
+        setWarningThreshold(threshold);
         setApprovedPackages(policyRes.approved_work_packages?.join('\n') ?? '');
       }
     } catch (err: any) {
@@ -78,8 +80,10 @@ export const AppUsageSummaryPage: React.FC = () => {
         .filter((p) => p.length > 0);
 
       const updated = await api.updateAppUsagePolicy({
+        usage_threshold_minutes: Number(warningThreshold),
         warning_threshold_minutes: Number(warningThreshold),
-        approved_work_packages: packagesList
+        approved_work_packages: packagesList,
+        change_reason: changeReason.trim() || 'Administrator updated app usage policy via web portal'
       });
       setPolicy(updated);
       setSuccessMsg('App usage monitoring policy updated successfully.');
@@ -316,9 +320,12 @@ export const AppUsageSummaryPage: React.FC = () => {
       {/* Modal: Policy Configuration */}
       {showPolicyModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl max-w-md w-full border border-[#E2E8F0] shadow-2xl p-6">
+          <div className="bg-white rounded-xl max-w-lg w-full border border-[#E2E8F0] shadow-2xl p-6">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="font-bold text-sm text-[#172B4D]">Configure App Usage Policy</h3>
+              <div className="flex items-center space-x-2">
+                <Settings className="w-4 h-4 text-[#17365D]" />
+                <h3 className="font-bold text-sm text-[#172B4D]">Configure App Usage Policy</h3>
+              </div>
               <button
                 onClick={() => setShowPolicyModal(false)}
                 className="text-slate-400 hover:text-slate-600"
@@ -328,6 +335,16 @@ export const AppUsageSummaryPage: React.FC = () => {
             </div>
 
             <form onSubmit={handleSavePolicy} className="space-y-4 mt-4">
+              {/* Educational Note about Android Package IDs */}
+              <div className="p-3 bg-blue-50/70 border border-blue-200/60 rounded-lg text-[11px] text-blue-900 leading-relaxed">
+                <span className="font-bold flex items-center gap-1 mb-1 text-blue-950">
+                  <Info className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                  Why do package names look like URLs (e.g. com.whatsapp)?
+                </span>
+                In the Android operating system, apps are not tracked by display title, but by their unique{' '}
+                <strong>Application Package ID</strong> (e.g., <code className="bg-blue-100/80 px-1 py-0.5 rounded font-mono text-[10px]">com.google.android.apps.maps</code> for Google Maps). The phone OS uses these IDs to monitor active foreground duty minutes.
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   Non-Work App Warning Threshold (Minutes)
@@ -347,17 +364,72 @@ export const AppUsageSummaryPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Approved Official Work App Package IDs (One per line)
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-slate-700">
+                    Approved Official Work App Package IDs
+                  </label>
+                  <span className="text-[10px] text-slate-400 font-medium">One package per line</span>
+                </div>
+
+                {/* Quick Add Presets */}
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  <span className="text-[10px] text-slate-500 font-semibold self-center mr-1">Quick Add:</span>
+                  {[
+                    { name: 'WhatsApp', pkg: 'com.whatsapp' },
+                    { name: 'Google Maps', pkg: 'com.google.android.apps.maps' },
+                    { name: 'Dialer / Phone', pkg: 'com.android.dialer' },
+                    { name: 'Contacts', pkg: 'com.android.contacts' },
+                    { name: 'Telegram', pkg: 'org.telegram.messenger' },
+                    { name: 'PoliceHQ GeoAttend', pkg: 'com.policehq.geoattend' }
+                  ].map((preset) => (
+                    <button
+                      key={preset.pkg}
+                      type="button"
+                      onClick={() => {
+                        const currentList = approvedPackages
+                          .split('\n')
+                          .map((p) => p.trim())
+                          .filter(Boolean);
+                        if (!currentList.includes(preset.pkg)) {
+                          setApprovedPackages([...currentList, preset.pkg].join('\n'));
+                        }
+                      }}
+                      className="px-2 py-0.5 bg-slate-100 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200 border border-slate-200 rounded text-[10px] font-medium text-slate-700 transition"
+                    >
+                      + {preset.name}
+                    </button>
+                  ))}
+                </div>
+
                 <textarea
                   rows={5}
                   value={approvedPackages}
                   onChange={(e) => setApprovedPackages(e.target.value)}
-                  placeholder="com.policehq.geoattend&#10;com.google.android.apps.maps"
+                  placeholder="com.policehq.geoattend&#10;com.google.android.apps.maps&#10;com.whatsapp"
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-[#17365D]"
                 />
               </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Reason for Change (Audit Log)
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={changeReason}
+                  onChange={(e) => setChangeReason(e.target.value)}
+                  placeholder="e.g., Updated approved communication apps for patrol staff"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-[#17365D]"
+                />
+              </div>
+
+              {error && (
+                <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-lg text-rose-700 text-xs flex items-center space-x-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                  <span>{error}</span>
+                </div>
+              )}
 
               <div className="flex items-center justify-end space-x-2 pt-3 border-t border-slate-100">
                 <button

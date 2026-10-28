@@ -61,6 +61,12 @@ async def submit_app_usage(
 
     # 2. Lookup officer profile
     profile = await db.officer_profiles.find_one({"user_id": user_id_str})
+    if profile and profile.get("app_usage_collection_enabled") is False:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="App-usage collection is not enabled for this personnel account. Explicit administrator activation is required."
+        )
+
     officer_id = profile.get("officer_id", current_user.get("username", "CONSTABLE")) if profile else current_user.get("username", "CONSTABLE")
     officer_name = profile.get("full_name", current_user.get("username")) if profile else current_user.get("username")
     rank = profile.get("rank", "Constable") if profile else "Constable"
@@ -195,18 +201,20 @@ async def get_app_usage_policy(
 @router.patch("/policy", response_model=AppUsagePolicyConfig)
 async def update_app_usage_policy(
     req: AppUsagePolicyUpdate,
-    admin_user: Dict[str, Any] = Depends(require_roles(["super_admin"])),
+    admin_user: Dict[str, Any] = Depends(require_roles(["super_admin", "hq_admin", "admin"])),
     db: AsyncIOMotorDatabase = Depends(get_database)
 ):
-    """Super Admin: Update usage reporting threshold and approved police work apps."""
+    """Admin: Update usage reporting threshold and approved police work apps."""
     policy = await _get_or_create_usage_policy(db)
     now = datetime.now(timezone.utc)
 
     updates: Dict[str, Any] = {"updated_at": now, "updated_by": admin_user["username"]}
     if req.enabled is not None:
         updates["enabled"] = req.enabled
-    if req.usage_threshold_minutes is not None:
-        updates["usage_threshold_minutes"] = req.usage_threshold_minutes
+    
+    threshold = req.usage_threshold_minutes if req.usage_threshold_minutes is not None else req.warning_threshold_minutes
+    if threshold is not None:
+        updates["usage_threshold_minutes"] = threshold
     if req.approved_work_packages is not None:
         updates["approved_work_packages"] = req.approved_work_packages
 
@@ -220,7 +228,7 @@ async def update_app_usage_policy(
         action="APP_USAGE_POLICY_UPDATED",
         target_type="configuration",
         target_id=str(policy["_id"]),
-        reason=req.change_reason,
+        reason=(req.change_reason.strip() if (req.change_reason and req.change_reason.strip()) else "Administrator updated app usage policy via web portal"),
         metadata=updates
     )
 
