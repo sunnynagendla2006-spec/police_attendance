@@ -502,21 +502,30 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
             ),
             const SizedBox(height: 10),
 
-            OutlinedButton.icon(
-              onPressed: () async {
-                if (isTracking) {
-                  await _locationService.stopTracking();
-                } else {
-                  await _locationService.startTracking();
-                }
-              },
-              icon: Icon(isTracking ? Icons.pause_circle_outline : Icons.play_circle_outline),
-              label: Text(isTracking ? 'PAUSE MONITORING' : 'START CONTINUOUS MONITORING'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: isTracking ? AppTheme.policeWarning : AppTheme.policeNavy,
-                side: BorderSide(color: isTracking ? AppTheme.policeWarning : AppTheme.borderLight),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
+              decoration: BoxDecoration(
+                color: isTracking ? AppTheme.policeSuccess.withOpacity(0.08) : const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: isTracking ? AppTheme.policeSuccess.withOpacity(0.3) : AppTheme.borderLight),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    isTracking ? Icons.shield_outlined : Icons.schedule,
+                    color: isTracking ? AppTheme.policeSuccess : AppTheme.textSecondary,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      isTracking
+                          ? 'Duty monitoring is ON (mandatory 09:30 - 18:00). This cannot be paused from the app.'
+                          : 'Outside duty monitoring window (09:30 - 18:00). Monitoring resumes automatically.',
+                      style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.3),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

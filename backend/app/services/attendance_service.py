@@ -214,3 +214,54 @@ async def get_officer_today_stats(db: AsyncIOMotorDatabase, user_id: str) -> Dic
         "latest_exit": latest_exit,
         "visits": visits
     }
+
+async def get_officer_today_stats_batch(db: AsyncIOMotorDatabase, user_ids: List[str]) -> Dict[str, Dict[str, Any]]:
+    """Batched equivalent of get_officer_today_stats for many officers at once.
+
+    Issues a single query for all of today's visits instead of one query per
+    officer, so the live dashboard does not run an N+1 query per refresh.
+    """
+    if not user_ids:
+        return {}
+
+    now = datetime.now(timezone.utc)
+    start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    cursor = db.attendance_visits.find({
+        "user_id": {"$in": user_ids},
+        "entry_at": {"$gte": start_of_day}
+    }).sort("entry_at", 1)
+    visits = await cursor.to_list(length=len(user_ids) * 50 + 500)
+
+    by_user: Dict[str, List[Dict[str, Any]]] = {uid: [] for uid in user_ids}
+    for v in visits:
+        by_user.setdefault(str(v.get("user_id")), []).append(v)
+
+    results: Dict[str, Dict[str, Any]] = {}
+    for uid, user_visits in by_user.items():
+        total_seconds = 0
+        first_entry = None
+        latest_exit = None
+        for v in user_visits:
+            if first_entry is None:
+                first_entry = v["entry_at"]
+            if v.get("exit_at"):
+                latest_exit = v["exit_at"]
+                total_seconds += (v.get("duration_seconds") or 0)
+            elif v.get("visit_status") == "OPEN":
+                entry_at = v["entry_at"]
+                if entry_at.tzinfo is None:
+                    entry_at = entry_at.replace(tzinfo=timezone.utc)
+                elapsed = max(0, int((now - entry_at).total_seconds()))
+                total_seconds += elapsed
+
+        results[uid] = {
+            "visit_count": len(user_visits),
+            "total_seconds": total_seconds,
+            "total_formatted": format_duration(total_seconds),
+            "first_entry": first_entry,
+            "latest_exit": latest_exit,
+            "visits": user_visits
+        }
+
+    return results

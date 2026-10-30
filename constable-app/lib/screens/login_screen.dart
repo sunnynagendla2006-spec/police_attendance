@@ -2,6 +2,24 @@ import 'package:flutter/material.dart';
 import '../core/theme.dart';
 import '../services/api_service.dart';
 import 'home_dashboard_screen.dart';
+import 'permissions_screen.dart';
+
+void _navigateToApp(BuildContext context) {
+  Navigator.pushReplacement(
+    context,
+    MaterialPageRoute(
+      builder: (gateContext) => PermissionsScreen(
+        gateMode: true,
+        onAllGranted: () {
+          Navigator.pushReplacement(
+            gateContext,
+            MaterialPageRoute(builder: (_) => const HomeDashboardScreen()),
+          );
+        },
+      ),
+    ),
+  );
+}
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -31,10 +49,7 @@ class _LoginScreenState extends State<LoginScreen> {
       try {
         await _apiService.getMe();
         if (mounted) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => const HomeDashboardScreen()),
-          );
+          _navigateToApp(context);
         }
       } catch (_) {
         // Token invalid or expired, stay on login
@@ -63,11 +78,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (!mounted) return;
 
-      // Navigate directly to HomeDashboardScreen - no forced password change required
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const HomeDashboardScreen()),
-      );
+      // Route through the mandatory permissions gate before the dashboard -
+      // no forced password change required.
+      _navigateToApp(context);
     } catch (e) {
       setState(() {
         _errorMessage = e.toString().replaceAll('Exception: ', '');

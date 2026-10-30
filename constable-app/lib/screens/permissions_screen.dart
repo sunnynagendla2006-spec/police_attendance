@@ -1,37 +1,87 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:usage_stats/usage_stats.dart';
 import '../core/theme.dart';
 
 class PermissionsScreen extends StatefulWidget {
-  const PermissionsScreen({super.key});
+  /// When true, renders as a full-screen mandatory onboarding gate with a
+  /// "Continue" button that only unlocks once every required permission is
+  /// granted, and calls [onAllGranted] when the officer taps it.
+  final bool gateMode;
+  final VoidCallback? onAllGranted;
+
+  const PermissionsScreen({super.key, this.gateMode = false, this.onAllGranted});
 
   @override
   State<PermissionsScreen> createState() => _PermissionsScreenState();
 }
 
-class _PermissionsScreenState extends State<PermissionsScreen> {
+class _PermissionsScreenState extends State<PermissionsScreen> with WidgetsBindingObserver {
   bool _isGpsEnabled = false;
   LocationPermission _locationPermission = LocationPermission.denied;
   PermissionStatus _backgroundStatus = PermissionStatus.denied;
+  PermissionStatus _batteryStatus = PermissionStatus.denied;
+  bool _usageAccessGranted = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _checkAllPermissions();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Officers often grant permissions from Settings, then return to the
+    // app - re-check immediately so the gate unlocks without a manual pull.
+    if (state == AppLifecycleState.resumed) {
+      _checkAllPermissions();
+    }
+  }
+
+  bool get _allMandatoryGranted {
+    final hasForeground = _locationPermission == LocationPermission.always || _locationPermission == LocationPermission.whileInUse;
+    final hasBackground = _locationPermission == LocationPermission.always || _backgroundStatus.isGranted;
+    return _isGpsEnabled && hasForeground && hasBackground && _batteryStatus.isGranted && _usageAccessGranted;
   }
 
   Future<void> _checkAllPermissions() async {
     final gps = await Geolocator.isLocationServiceEnabled();
     final locPerm = await Geolocator.checkPermission();
     final bgStatus = await Permission.locationAlways.status;
+    final batteryStatus = await Permission.ignoreBatteryOptimizations.status;
+    bool usageGranted = false;
+    try {
+      usageGranted = await UsageStats.checkUsagePermission() ?? false;
+    } catch (_) {
+      usageGranted = false;
+    }
 
+    if (!mounted) return;
     setState(() {
       _isGpsEnabled = gps;
       _locationPermission = locPerm;
       _backgroundStatus = bgStatus;
+      _batteryStatus = batteryStatus;
+      _usageAccessGranted = usageGranted;
     });
+
+    // Skip the gate instantly on subsequent launches once everything is
+    // already granted, instead of forcing the officer to tap Continue.
+    if (widget.gateMode && _allMandatoryGranted && !_autoAdvanced) {
+      _autoAdvanced = true;
+      widget.onAllGranted?.call();
+    }
   }
+
+  bool _autoAdvanced = false;
 
   Future<void> _requestLocationPermission() async {
     await Geolocator.requestPermission();
@@ -40,6 +90,18 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
 
   Future<void> _requestBackgroundPermission() async {
     await Permission.locationAlways.request();
+    await _checkAllPermissions();
+  }
+
+  Future<void> _requestBatteryOptimizationExemption() async {
+    await Permission.ignoreBatteryOptimizations.request();
+    await _checkAllPermissions();
+  }
+
+  Future<void> _requestUsageAccess() async {
+    // Usage Access cannot be granted via a runtime dialog - Android requires
+    // the officer to flip it on in the dedicated system settings screen.
+    await UsageStats.grantUsagePermission();
     await _checkAllPermissions();
   }
 
@@ -102,7 +164,7 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
     final hasForeground = _locationPermission == LocationPermission.always || _locationPermission == LocationPermission.whileInUse;
     final hasBackground = _locationPermission == LocationPermission.always || _backgroundStatus.isGranted;
 
-    return SingleChildScrollView(
+    final body = SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -179,10 +241,24 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
           _buildStatusRow(
             icon: Icons.battery_charging_full,
             title: 'Battery Optimization',
-            subtitle: 'Recommended: Disable battery restrictions for unhindered duty check-ins',
-            isGranted: true,
-            onRequest: () => openAppSettings(),
-            buttonText: 'Settings',
+            subtitle: _batteryStatus.isGranted
+                ? 'Battery restrictions disabled for uninterrupted duty monitoring'
+                : 'Required: Disable battery restrictions so monitoring is not killed in the background',
+            isGranted: _batteryStatus.isGranted,
+            onRequest: _requestBatteryOptimizationExemption,
+            buttonText: 'Allow',
+          ),
+          const SizedBox(height: 10),
+
+          _buildStatusRow(
+            icon: Icons.hourglass_bottom,
+            title: 'Digital Wellbeing / Usage Access',
+            subtitle: _usageAccessGranted
+                ? 'Screen-time and app-usage reporting enabled'
+                : 'Required: Grant Usage Access so on-duty screen-time can be reported',
+            isGranted: _usageAccessGranted,
+            onRequest: _requestUsageAccess,
+            buttonText: 'Allow',
           ),
           const SizedBox(height: 20),
 
@@ -197,7 +273,40 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
           ),
+
+          if (widget.gateMode) ...[
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _allMandatoryGranted ? widget.onAllGranted : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.policeNavy,
+                disabledBackgroundColor: AppTheme.borderLight,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              child: Text(
+                _allMandatoryGranted ? 'CONTINUE TO DASHBOARD' : 'GRANT ALL PERMISSIONS TO CONTINUE',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
         ],
+      ),
+    );
+
+    if (!widget.gateMode) return body;
+
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
+        backgroundColor: AppTheme.pageBackground,
+        appBar: AppBar(
+          title: const Text('Required Permissions'),
+          backgroundColor: AppTheme.policeNavy,
+          foregroundColor: Colors.white,
+          automaticallyImplyLeading: false,
+        ),
+        body: body,
       ),
     );
   }

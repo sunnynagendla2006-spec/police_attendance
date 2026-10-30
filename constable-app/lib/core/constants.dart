@@ -26,4 +26,17 @@ class AppConstants {
   // Location Quality Thresholds
   static const double maxAcceptableAccuracyMeters = 35.0;
   static const int locationIntervalSeconds = 30;
+
+  // Mandatory Duty Monitoring Window (local device time)
+  // Location tracking runs automatically for the full window below and
+  // cannot be paused by the officer from within the app.
+  static const int dutyStartHour = 9;
+  static const int dutyStartMinute = 30;
+  static const int dutyEndHour = 18;
+  static const int dutyEndMinute = 0;
+  static const int dutyWindowCheckSeconds = 60;
+
+  // Digital Wellbeing
+  static const String keyPermissionsOnboardingComplete = 'permissions_onboarding_complete_flag';
+  static const int appUsageReportIntervalMinutes = 30;
 }

@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/constants.dart';
 import '../models/location_observation.dart';
 import 'api_service.dart';
+import 'digital_wellbeing_service.dart';
 import 'offline_queue_service.dart';
 
 enum TrackingState {
@@ -24,9 +25,11 @@ class LocationTrackingService extends ChangeNotifier {
 
   final ApiService _apiService = ApiService();
   final OfflineQueueService _queueService = OfflineQueueService();
+  final DigitalWellbeingService _wellbeingService = DigitalWellbeingService();
 
   StreamSubscription<Position>? _positionStream;
   Timer? _heartbeatTimer;
+  Timer? _dutyWindowTimer;
 
   bool _isTracking = false;
   TrackingState _state = TrackingState.unknown;
@@ -71,6 +74,16 @@ class LocationTrackingService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// True while the current local device time falls inside the mandatory
+  /// duty monitoring window (09:30 - 18:00). Officers cannot opt out of
+  /// monitoring during this window from within the app.
+  bool isWithinDutyWindow([DateTime? at]) {
+    final now = at ?? DateTime.now();
+    final start = DateTime(now.year, now.month, now.day, AppConstants.dutyStartHour, AppConstants.dutyStartMinute);
+    final end = DateTime(now.year, now.month, now.day, AppConstants.dutyEndHour, AppConstants.dutyEndMinute);
+    return !now.isBefore(start) && !now.isAfter(end);
+  }
+
   Future<void> initialize() async {
     final cachedHq = await _apiService.getCachedHeadquarters();
     if (cachedHq != null) {
@@ -80,10 +93,24 @@ class LocationTrackingService extends ChangeNotifier {
       _hqRadius = cachedHq.radiusMeters;
     }
 
-    final prefs = await SharedPreferences.getInstance();
-    final shouldTrack = prefs.getBool(AppConstants.keyTrackingActive) ?? false;
-    if (shouldTrack) {
+    // Tracking is no longer a manual officer-controlled toggle. It is
+    // enforced automatically for the entire 09:30-18:00 duty window as
+    // long as the device is within that window, and a watcher re-checks
+    // every minute so it starts/stops itself without any user action.
+    await _evaluateDutyWindow();
+    _dutyWindowTimer?.cancel();
+    _dutyWindowTimer = Timer.periodic(
+      const Duration(seconds: AppConstants.dutyWindowCheckSeconds),
+      (_) => _evaluateDutyWindow(),
+    );
+  }
+
+  Future<void> _evaluateDutyWindow() async {
+    final inWindow = isWithinDutyWindow();
+    if (inWindow && !_isTracking) {
       await startTracking();
+    } else if (!inWindow && _isTracking) {
+      await stopTracking(officerInitiated: false);
     }
   }
 
@@ -127,6 +154,8 @@ class LocationTrackingService extends ChangeNotifier {
     _statusMessage = 'Location monitoring active';
     notifyListeners();
 
+    _wellbeingService.start();
+
     // 1. Get initial position immediately
     await sendCurrentLocation();
 
@@ -153,13 +182,19 @@ class LocationTrackingService extends ChangeNotifier {
     });
   }
 
-  Future<void> stopTracking() async {
+  /// Stops the active location stream. [officerInitiated] is always false
+  /// now that the officer has no manual pause control - this only fires
+  /// when the duty window watcher detects time has passed 18:00.
+  Future<void> stopTracking({bool officerInitiated = false}) async {
     _isTracking = false;
     _positionStream?.cancel();
     _heartbeatTimer?.cancel();
+    _wellbeingService.stop();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(AppConstants.keyTrackingActive, false);
-    _statusMessage = 'Tracking paused by officer';
+    _statusMessage = isWithinDutyWindow()
+        ? 'Tracking stopped'
+        : 'Outside duty monitoring window (09:30 - 18:00)';
     notifyListeners();
   }
 
@@ -237,6 +272,7 @@ class LocationTrackingService extends ChangeNotifier {
   void dispose() {
     _positionStream?.cancel();
     _heartbeatTimer?.cancel();
+    _dutyWindowTimer?.cancel();
     super.dispose();
   }
 }

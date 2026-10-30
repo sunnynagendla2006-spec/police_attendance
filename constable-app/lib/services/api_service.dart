@@ -233,6 +233,23 @@ class ApiService {
     }
   }
 
+  // 4b. Submit Digital Wellbeing / App Usage Summary
+  Future<Map<String, dynamic>> submitAppUsage(Map<String, dynamic> payload) async {
+    final url = Uri.parse('${await baseUrl}/app-usage');
+    final response = await http.post(
+      url,
+      headers: await _headers(needsAuth: true),
+      body: jsonEncode(payload),
+    );
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return jsonDecode(response.body);
+    } else {
+      final error = jsonDecode(response.body);
+      throw Exception(error['detail'] ?? 'App usage submission failed (${response.statusCode})');
+    }
+  }
+
   // 5. Sync Offline Location Observations
   Future<Map<String, dynamic>> syncOfflineObservations(List<LocationObservationModel> observations) async {
     if (observations.isEmpty) return {'processed_count': 0};

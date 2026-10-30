@@ -42,6 +42,24 @@ export const LiveMap: React.FC<Props> = ({ targetOfficerId, onNavigateToAssignme
   const facilityLayersRef = useRef<Map<string, { marker: L.Marker; circle: L.Circle }>>(new Map());
   const officerMarkersRef = useRef<Map<string, L.Marker>>(new Map());
   const initialCenteredRef = useRef<boolean>(false);
+  // Debounces the "stale" flag per officer so a single borderline poll/
+  // websocket reading right at the staleness threshold doesn't flip a
+  // marker on/off repeatedly. Going fresh is always applied immediately
+  // (a real new GPS fix arrived); going stale only "sticks" once it has
+  // been reported stale for a few consecutive updates in a row.
+  const staleStreakRef = useRef<Map<string, number>>(new Map());
+  const STALE_CONFIRM_COUNT = 2;
+
+  const resolveDisplayStale = (key: string, rawIsStale: boolean): boolean => {
+    const streak = staleStreakRef.current;
+    if (!rawIsStale) {
+      streak.delete(key);
+      return false;
+    }
+    const count = (streak.get(key) || 0) + 1;
+    streak.set(key, count);
+    return count >= STALE_CONFIRM_COUNT;
+  };
 
   // State
   const [facilities, setFacilities] = useState<Headquarters[]>([]);
@@ -199,8 +217,13 @@ export const LiveMap: React.FC<Props> = ({ targetOfficerId, onNavigateToAssignme
         api.getLiveLocations()
       ]);
 
+      const debounced = (liveLocationsData || []).map(o => ({
+        ...o,
+        is_stale: resolveDisplayStale(o.user_id || o.officer_id, o.is_stale),
+      }));
+
       setFacilities(facilitiesData || []);
-      setOfficers(liveLocationsData || []);
+      setOfficers(debounced);
       setLastUpdated(new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
 
       // Handle targeted officer navigation on initial load
@@ -281,7 +304,8 @@ export const LiveMap: React.FC<Props> = ({ targetOfficerId, onNavigateToAssignme
     loadData();
 
     const handleLocationUpdate = (e: any) => {
-      const updated = e.detail;
+      const updated = { ...e.detail };
+      updated.is_stale = resolveDisplayStale(updated.user_id || updated.officer_id, updated.is_stale);
       setOfficers(prev => {
         const idx = prev.findIndex(o => o.user_id === updated.user_id || o.officer_id === updated.officer_id);
         if (idx !== -1) {

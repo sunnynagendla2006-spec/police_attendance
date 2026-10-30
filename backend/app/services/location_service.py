@@ -16,7 +16,7 @@ from app.services.geofence_engine import (
 )
 from app.services.attendance_service import (
     process_geofence_transition,
-    get_officer_today_stats
+    get_officer_today_stats_batch
 )
 from app.services.websocket_manager import ws_manager
 
@@ -264,6 +264,22 @@ async def get_all_live_locations(
     # 3. Find all active officer profiles
     cursor = db.officer_profiles.find({"profile_status": "ACTIVE"})
     profiles = await cursor.to_list(length=500)
+    all_user_ids = [str(p["user_id"]) for p in profiles]
+
+    # 4. Batch-load latest observation per officer (one aggregation instead
+    # of one find_one() per officer) and today's attendance stats for all
+    # officers in a single query, instead of 2N queries for N officers.
+    latest_obs_by_user: Dict[str, Dict[str, Any]] = {}
+    if all_user_ids:
+        agg_cursor = db.location_observations.aggregate([
+            {"$match": {"user_id": {"$in": all_user_ids}}},
+            {"$sort": {"observed_at": -1}},
+            {"$group": {"_id": "$user_id", "doc": {"$first": "$$ROOT"}}}
+        ])
+        async for row in agg_cursor:
+            latest_obs_by_user[row["_id"]] = row["doc"]
+
+    stats_by_user = await get_officer_today_stats_batch(db, all_user_ids)
 
     results = []
     for p in profiles:
@@ -310,14 +326,9 @@ async def get_all_live_locations(
             target_lat = hq_config["latitude"]
             target_lon = hq_config["longitude"]
 
-        # Latest observation
-        last_obs = await db.location_observations.find_one(
-            {"user_id": user_id},
-            sort=[("observed_at", -1)]
-        )
-
-        # Get today stats
-        stats = await get_officer_today_stats(db, user_id)
+        # Latest observation and today stats (both pre-loaded in batch above)
+        last_obs = latest_obs_by_user.get(user_id)
+        stats = stats_by_user.get(user_id) or {"visit_count": 0, "total_seconds": 0}
 
         if not last_obs:
             results.append(OfficerLiveLocation(
