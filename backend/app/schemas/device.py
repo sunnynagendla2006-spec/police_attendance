@@ -31,6 +31,13 @@ class DeviceApprovalRequest(BaseModel):
     approval_status: str = Field(..., pattern="^(APPROVED|REVOKED)$")
     reason: str = Field(..., min_length=3, description="Operational audit reason")
 
+class DeviceResetRequest(BaseModel):
+    officer_id: Optional[str] = None
+    constable_user_id: Optional[str] = None
+    user_id: Optional[str] = None
+    old_device_id: Optional[str] = None
+    reason: str = Field(..., min_length=3, description="Administrative justification for deleting the device binding")
+
 class DeviceReplacementRequest(BaseModel):
     officer_id: Optional[str] = None
     constable_user_id: Optional[str] = None

@@ -580,10 +580,21 @@ class ApiService {
   async replaceDevice(data: {
     constable_user_id: string;
     old_device_id: string;
-    new_device_id: string;
+    new_device_id?: string;
     reason: string;
   }): Promise<{ status: string; message: string }> {
     return this.request<{ status: string; message: string }>('/devices/replace', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  }
+
+  async resetDevice(data: {
+    constable_user_id: string;
+    old_device_id?: string;
+    reason: string;
+  }): Promise<{ status: string; message: string }> {
+    return this.request<{ status: string; message: string }>('/devices/reset', {
       method: 'POST',
       body: JSON.stringify(data)
     });

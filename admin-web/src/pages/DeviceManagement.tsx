@@ -30,10 +30,9 @@ export const DeviceManagement: React.FC = () => {
   const [approveReason, setApproveReason] = useState<string>('');
   const [showApproveModal, setShowApproveModal] = useState<boolean>(false);
 
-  const [showReplaceModal, setShowReplaceModal] = useState<boolean>(false);
-  const [replaceTargetDevice, setReplaceTargetDevice] = useState<DeviceRecord | null>(null);
-  const [newDeviceId, setNewDeviceId] = useState<string>('');
-  const [replaceReason, setReplaceReason] = useState<string>('');
+  const [showResetModal, setShowResetModal] = useState<boolean>(false);
+  const [resetTargetDevice, setResetTargetDevice] = useState<DeviceRecord | null>(null);
+  const [resetReason, setResetReason] = useState<string>('');
   const [submitting, setSubmitting] = useState<boolean>(false);
 
   const loadData = async () => {
@@ -80,30 +79,31 @@ export const DeviceManagement: React.FC = () => {
     }
   };
 
-  const handleReplace = async (e: React.FormEvent) => {
+  const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!replaceTargetDevice || !newDeviceId || !replaceReason) {
-      setError('Please provide new device ID and replacement reason.');
+    if (!resetTargetDevice || !resetReason) {
+      setError('Please provide a reason for the device reset.');
       return;
     }
     try {
       setSubmitting(true);
       setError(null);
-      await api.replaceDevice({
-        constable_user_id: replaceTargetDevice.user_id,
-        old_device_id: replaceTargetDevice.device_id,
-        new_device_id: newDeviceId,
-        reason: replaceReason
+      // Deletes the officer's bound device registration entirely (not just
+      // revoke). Their next app login - same phone or a new one - auto
+      // registers and auto-approves a fresh device binding.
+      await api.resetDevice({
+        constable_user_id: resetTargetDevice.user_id,
+        old_device_id: resetTargetDevice.device_id,
+        reason: resetReason
       });
-      setSuccessMsg('Device binding replaced and approved successfully.');
-      setShowReplaceModal(false);
-      setReplaceTargetDevice(null);
-      setNewDeviceId('');
-      setReplaceReason('');
+      setSuccessMsg('Device registration reset. The officer can log in again to bind a new device.');
+      setShowResetModal(false);
+      setResetTargetDevice(null);
+      setResetReason('');
       await loadData();
       setTimeout(() => setSuccessMsg(null), 4000);
     } catch (err: any) {
-      setError(err.message || 'Failed to replace device binding.');
+      setError(err.message || 'Failed to reset device registration.');
     } finally {
       setSubmitting(false);
     }
@@ -296,12 +296,12 @@ export const DeviceManagement: React.FC = () => {
                         )}
                         <button
                           onClick={() => {
-                            setReplaceTargetDevice(device);
-                            setShowReplaceModal(true);
+                            setResetTargetDevice(device);
+                            setShowResetModal(true);
                           }}
                           className="text-xs text-[#2563EB] hover:text-[#1D4ED8] font-bold"
                         >
-                          Replace Device
+                          Reset
                         </button>
                       </td>
                     </tr>
@@ -361,50 +361,39 @@ export const DeviceManagement: React.FC = () => {
         </div>
       )}
 
-      {/* Modal: Replace Device */}
-      {showReplaceModal && replaceTargetDevice && (
+      {/* Modal: Reset Device */}
+      {showResetModal && resetTargetDevice && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-xl max-w-md w-full border border-[#E2E8F0] shadow-2xl p-6">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="font-bold text-sm text-[#172B4D]">Replace Bound Device</h3>
+              <h3 className="font-bold text-sm text-[#172B4D]">Reset Device Registration</h3>
               <button
-                onClick={() => setShowReplaceModal(false)}
+                onClick={() => setShowResetModal(false)}
                 className="text-slate-400 hover:text-slate-600"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleReplace} className="space-y-4 mt-4">
+            <form onSubmit={handleReset} className="space-y-4 mt-4">
               <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900">
-                Replacing the device will revoke current access on{' '}
-                <strong>{replaceTargetDevice.device_model}</strong> and bind the officer to the new hardware token.
+                This deletes the current binding to{' '}
+                <strong>{resetTargetDevice.device_model}</strong> for{' '}
+                <strong>{resetTargetDevice.officer_name}</strong>. No new device ID is needed - the
+                officer's next app login (on this phone or a replacement one) will automatically
+                register and approve as a fresh device.
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  New Device Hardware ID *
+                  Justification / Reset Reason *
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. android-keystore-hash or UUID"
-                  value={newDeviceId}
-                  onChange={(e) => setNewDeviceId(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-[#17365D]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Justification / Replacement Reason *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Lost device, official phone upgrade, device damaged"
-                  value={replaceReason}
-                  onChange={(e) => setReplaceReason(e.target.value)}
+                  placeholder="e.g. Lost device, app reinstalled, official phone upgrade"
+                  value={resetReason}
+                  onChange={(e) => setResetReason(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-[#17365D]"
                 />
               </div>
@@ -412,7 +401,7 @@ export const DeviceManagement: React.FC = () => {
               <div className="flex items-center justify-end space-x-2 pt-3 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setShowReplaceModal(false)}
+                  onClick={() => setShowResetModal(false)}
                   className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition"
                 >
                   Cancel
@@ -422,7 +411,7 @@ export const DeviceManagement: React.FC = () => {
                   disabled={submitting}
                   className="px-4 py-2 bg-[#17365D] hover:bg-[#1E4273] text-white text-xs font-semibold rounded-lg shadow-sm transition disabled:opacity-50"
                 >
-                  {submitting ? 'Processing...' : 'Authorize Replacement'}
+                  {submitting ? 'Resetting...' : 'Confirm Reset'}
                 </button>
               </div>
             </form>

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:android_id/android_id.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
@@ -16,13 +17,30 @@ class ApiService {
   String? _cachedToken;
   String? _customBaseUrl;
 
+  /// Returns a stable per-device identifier used to bind a constable
+  /// account to one phone. Uses Android's Settings.Secure.ANDROID_ID,
+  /// which survives an app uninstall/reinstall on the same physical
+  /// device (unlike a random UUID stored in SharedPreferences, which is
+  /// wiped on uninstall and previously caused "unauthorized device"
+  /// errors when officers reinstalled the app on their own phone).
+  /// Falls back to a locally generated UUID if the hardware ID is
+  /// unavailable (e.g. non-Android platforms).
   Future<String> getOrCreateDeviceId() async {
     final prefs = await SharedPreferences.getInstance();
-    var devId = prefs.getString(AppConstants.keyDeviceId);
-    if (devId == null || devId.trim().isEmpty) {
-      devId = 'dev-${const Uuid().v4()}';
-      await prefs.setString(AppConstants.keyDeviceId, devId);
+    final cached = prefs.getString(AppConstants.keyDeviceId);
+    if (cached != null && cached.trim().isNotEmpty) {
+      return cached;
     }
+
+    String? devId;
+    try {
+      devId = await const AndroidId().getId();
+    } catch (_) {
+      devId = null;
+    }
+
+    devId ??= 'dev-${const Uuid().v4()}';
+    await prefs.setString(AppConstants.keyDeviceId, devId);
     return devId;
   }
 

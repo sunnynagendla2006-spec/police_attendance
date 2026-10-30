@@ -8,7 +8,8 @@ from app.schemas.device import (
     DeviceRegistrationRequest,
     DeviceRecordResponse,
     DeviceApprovalRequest,
-    DeviceReplacementRequest
+    DeviceReplacementRequest,
+    DeviceResetRequest
 )
 from app.services.auth_service import require_roles, get_current_user
 from app.services.audit_service import record_audit_log
@@ -109,6 +110,61 @@ async def approve_device(
     return {
         "status": "SUCCESS",
         "message": f"Device {device.get('device_identifier')} has been updated to {req.approval_status}."
+    }
+
+@router.post("/reset")
+async def reset_constable_device(
+    req: DeviceResetRequest,
+    admin_user: Dict[str, Any] = Depends(require_roles(["super_admin", "hq_admin", "admin"])),
+    db: AsyncIOMotorDatabase = Depends(get_database)
+):
+    """
+    Device Reset: permanently deletes the officer's registered device
+    binding(s) (not just revoke). Their next app login - whether from the
+    same physical phone after an app reinstall, or a brand new handset -
+    auto-registers and auto-approves a fresh device, with no admin step
+    to pre-authorize a specific new device ID.
+    """
+    profile = None
+    if req.officer_id and req.officer_id.strip():
+        oid = req.officer_id.strip()
+        profile = await db.officer_profiles.find_one({
+            "$or": [
+                {"officer_id": oid},
+                {"officer_id": {"$regex": f"^{oid}$", "$options": "i"}}
+            ]
+        })
+    target_uid = req.constable_user_id or req.user_id
+    if not profile and target_uid:
+        uid_str = str(target_uid).strip()
+        profile = await db.officer_profiles.find_one({
+            "$or": [
+                {"user_id": uid_str},
+                {"user_id": ObjectId(uid_str) if ObjectId.is_valid(uid_str) else uid_str},
+                {"_id": ObjectId(uid_str) if ObjectId.is_valid(uid_str) else uid_str}
+            ]
+        })
+
+    user_id_str = str(profile["user_id"]) if profile else str(target_uid) if target_uid else None
+    if not user_id_str:
+        raise HTTPException(status_code=404, detail="Officer profile or constable_user_id not found.")
+
+    res = await db.registered_devices.delete_many({"user_id": user_id_str})
+
+    await record_audit_log(
+        db=db,
+        actor_user_id=str(admin_user["_id"]),
+        actor_username=admin_user["username"],
+        action="DEVICE_RESET_DELETED",
+        target_type="user",
+        target_id=user_id_str,
+        reason=req.reason,
+        metadata={"devices_deleted": res.deleted_count, "old_device_id": req.old_device_id}
+    )
+
+    return {
+        "status": "SUCCESS",
+        "message": f"Deleted {res.deleted_count} device binding(s). Officer can log in to register a new device."
     }
 
 @router.post("/replace")
