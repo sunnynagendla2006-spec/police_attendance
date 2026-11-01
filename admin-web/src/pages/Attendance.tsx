@@ -91,10 +91,10 @@ export const Attendance: React.FC = () => {
         <div>
           <h2 className="text-lg font-bold text-slate-800 flex items-center space-x-2">
             <Building2 className="w-5 h-5 text-[#17365D]" />
-            <span>Headquarters Attendance Ledger</span>
+            <span>Attendance Ledger</span>
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Authoritative physical presence and visit ledger for Eluru District Police Headquarters
+            Physical presence and visit ledger, evaluated against each officer's own approved duty location
           </p>
         </div>
 
@@ -210,6 +210,7 @@ export const Attendance: React.FC = () => {
                 <th className="py-3 px-4">Police Personnel</th>
                 <th className="py-3 px-4">Police ID</th>
                 <th className="py-3 px-4">Rank / Station</th>
+                <th className="py-3 px-4">Duty Location</th>
                 <th className="py-3 px-4">First Entry</th>
                 <th className="py-3 px-4">Latest Exit</th>
                 <th className="py-3 px-4">Visit Count</th>
@@ -221,13 +222,13 @@ export const Attendance: React.FC = () => {
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-slate-400">
-                    Loading headquarters attendance ledger...
+                  <td colSpan={10} className="py-12 text-center text-slate-400">
+                    Loading attendance ledger...
                   </td>
                 </tr>
               ) : paginatedSummaries.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-slate-400">
+                  <td colSpan={10} className="py-12 text-center text-slate-400">
                     No attendance records available for this period.
                   </td>
                 </tr>
@@ -253,6 +254,11 @@ export const Attendance: React.FC = () => {
                       <td className="py-3 px-4">
                         <div className="text-slate-800 font-medium">{s.rank}</div>
                         <div className="text-[10px] text-slate-400">{s.department}</div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                          {s.duty_location_name}
+                        </span>
                       </td>
                       <td className="py-3 px-4 font-mono text-slate-600">
                         {s.first_entry_today ? (

@@ -180,6 +180,7 @@ export const VisitHistory: React.FC = () => {
                 <th className="py-3 px-4">Police Personnel</th>
                 <th className="py-3 px-4">Police ID</th>
                 <th className="py-3 px-4">Rank / Station</th>
+                <th className="py-3 px-4">Visited Location</th>
                 <th className="py-3 px-4">Entry Timestamp</th>
                 <th className="py-3 px-4">Exit Timestamp</th>
                 <th className="py-3 px-4">Duration</th>
@@ -191,13 +192,13 @@ export const VisitHistory: React.FC = () => {
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-slate-400">
+                  <td colSpan={10} className="py-12 text-center text-slate-400">
                     Loading visit sessions ledger...
                   </td>
                 </tr>
               ) : paginatedVisits.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-slate-400">
+                  <td colSpan={10} className="py-12 text-center text-slate-400">
                     No visit records found.
                   </td>
                 </tr>
@@ -214,6 +215,11 @@ export const VisitHistory: React.FC = () => {
                     <td className="py-3 px-4">
                       <div className="text-slate-800 font-medium">{v.rank}</div>
                       <div className="text-[10px] text-slate-400">{v.department}</div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                        {v.headquarters_name}
+                      </span>
                     </td>
                     <td className="py-3 px-4 font-mono text-slate-600">
                       {new Date(v.entry_at).toLocaleString('en-IN', {

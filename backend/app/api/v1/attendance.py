@@ -14,6 +14,7 @@ from app.schemas.attendance import (
 from app.services.auth_service import get_current_user, require_roles
 from app.services.attendance_service import format_duration, get_officer_today_stats
 from app.services.audit_service import record_audit_log
+from app.services.location_service import resolve_target_facility
 
 router = APIRouter(prefix="/attendance", tags=["Headquarters Attendance & Visits"])
 
@@ -55,6 +56,7 @@ async def get_attendance_visits(
             rank=v.get("rank", "Constable"),
             department=v.get("department", "District Police"),
             headquarters_id=v.get("headquarters_id", "default"),
+            headquarters_name=v.get("headquarters_name", "Headquarters"),
             entry_at=v["entry_at"],
             exit_at=v.get("exit_at"),
             duration_seconds=v.get("duration_seconds"),
@@ -111,9 +113,18 @@ async def get_attendance_summary_today(
 
     for p in profiles:
         user_id = p["user_id"]
-        
+
+        # Attribute attendance only against the officer's OWN approved duty
+        # location (their active assignment, or primary HQ if unassigned) -
+        # otherwise a constable posted to a station who was also seen at
+        # another facility would have that visit counted here too.
+        target = await resolve_target_facility(db, user_id, end_of_period)
+        duty_location_id = target["location_id"]
+        duty_location_name = target["location_name"]
+
         visits = await db.attendance_visits.find({
             "user_id": user_id,
+            "headquarters_id": duty_location_id,
             "entry_at": {"$gte": start_of_period, "$lte": end_of_period}
         }).sort("entry_at", 1).to_list(length=100)
 
@@ -160,6 +171,7 @@ async def get_attendance_summary_today(
             officer_name=p["full_name"],
             rank=p["rank"],
             department=p["department"],
+            duty_location_name=duty_location_name,
             first_entry_today=first_entry,
             latest_exit_today=latest_exit,
             visits_today=len(visits),

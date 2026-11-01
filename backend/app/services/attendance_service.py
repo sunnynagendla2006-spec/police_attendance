@@ -69,6 +69,7 @@ async def process_geofence_transition(
             "rank": rank,
             "department": department,
             "headquarters_id": hq_id,
+            "headquarters_name": hq_config.get("name", "Headquarters"),
             "entry_at": observation_time,
             "exit_at": None,
             "duration_seconds": None,

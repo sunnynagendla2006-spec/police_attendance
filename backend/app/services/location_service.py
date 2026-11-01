@@ -24,19 +24,20 @@ from app.services.assignment_service import get_active_assignment_for_constable
 
 logger = logging.getLogger(__name__)
 
-async def process_single_observation(
+async def resolve_target_facility(
     db: AsyncIOMotorDatabase,
-    user: Dict[str, Any],
-    profile: Dict[str, Any],
-    obs: LocationObservationCreate,
-    sync_status: str = "REALTIME"
-) -> LocationObservationResult:
-    """Validate and process a location observation through the geofence engine against officer's assigned duty post."""
-    user_id = str(user["_id"])
-    now = datetime.now(timezone.utc)
-    
-    # 1. Retrieve Officer's Active Duty Assignment & Target Facility
-    asgn = await get_active_assignment_for_constable(db, user_id, obs.observed_at)
+    user_id: str,
+    at: datetime
+) -> Dict[str, Any]:
+    """
+    Resolve the facility a constable's location should be evaluated against:
+    their currently active duty assignment if one exists, otherwise the
+    primary headquarters. Used consistently for geofence evaluation and for
+    attendance reporting, so an officer posted to a station is only ever
+    marked present/absent against THEIR OWN approved duty location instead
+    of the main headquarters.
+    """
+    asgn = await get_active_assignment_for_constable(db, user_id, at)
     target_facility = None
     if asgn and asgn.get("location_id"):
         loc_id_str = str(asgn["location_id"])
@@ -45,7 +46,6 @@ async def process_single_observation(
         if not target_facility:
             target_facility = await db.headquarters.find_one({"_id": loc_id_str})
 
-    # Default to primary headquarters if no active assignment or facility not found
     hq_config = await get_active_geofence_config(db)
     if target_facility:
         target_coords = target_facility.get("location", {}).get(
@@ -64,6 +64,37 @@ async def process_single_observation(
         target_loc_id = hq_config.get("headquarters_id", "default")
         target_loc_name = hq_config.get("name", "Headquarters")
         target_loc_code = "AP-HQ"
+
+    return {
+        "hq_config": hq_config,
+        "latitude": target_lat,
+        "longitude": target_lon,
+        "radius_meters": target_radius,
+        "location_id": target_loc_id,
+        "location_name": target_loc_name,
+        "location_code": target_loc_code,
+    }
+
+async def process_single_observation(
+    db: AsyncIOMotorDatabase,
+    user: Dict[str, Any],
+    profile: Dict[str, Any],
+    obs: LocationObservationCreate,
+    sync_status: str = "REALTIME"
+) -> LocationObservationResult:
+    """Validate and process a location observation through the geofence engine against officer's assigned duty post."""
+    user_id = str(user["_id"])
+    now = datetime.now(timezone.utc)
+
+    # 1. Resolve the officer's own approved duty location (or primary HQ as fallback)
+    target = await resolve_target_facility(db, user_id, obs.observed_at)
+    hq_config = target["hq_config"]
+    target_lat = target["latitude"]
+    target_lon = target["longitude"]
+    target_radius = target["radius_meters"]
+    target_loc_id = target["location_id"]
+    target_loc_name = target["location_name"]
+    target_loc_code = target["location_code"]
 
     accuracy_thresh = hq_config.get("accuracy_threshold_meters", 35.0)
     stale_thresh = hq_config.get("stale_threshold_seconds", 300)

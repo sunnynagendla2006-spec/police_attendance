@@ -10,6 +10,7 @@ class AttendanceVisitResponse(BaseModel):
     rank: str
     department: str
     headquarters_id: str
+    headquarters_name: str = "Headquarters"
     entry_at: datetime
     exit_at: Optional[datetime] = None
     duration_seconds: Optional[int] = None
@@ -42,6 +43,7 @@ class OfficerAttendanceSummary(BaseModel):
     officer_name: str
     rank: str
     department: str
+    duty_location_name: str = "Headquarters"
     first_entry_today: Optional[datetime] = None
     latest_exit_today: Optional[datetime] = None
     visits_today: int = 0

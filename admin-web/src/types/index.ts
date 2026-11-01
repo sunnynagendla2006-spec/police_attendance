@@ -219,6 +219,7 @@ export interface AttendanceVisit {
   rank: string;
   department: string;
   headquarters_id: string;
+  headquarters_name: string;
   entry_at: string;
   exit_at?: string;
   duration_seconds?: number;
@@ -237,6 +238,7 @@ export interface OfficerAttendanceSummary {
   officer_name: string;
   rank: string;
   department: string;
+  duty_location_name: string;
   first_entry_today?: string;
   latest_exit_today?: string;
   visits_today: number;
