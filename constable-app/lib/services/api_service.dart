@@ -86,7 +86,46 @@ class ApiService {
     _cachedToken = auth.accessToken;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(AppConstants.keyToken, auth.accessToken);
+    if (auth.refreshToken != null) {
+      await prefs.setString(AppConstants.keyRefreshToken, auth.refreshToken!);
+    }
     await prefs.setString(AppConstants.keyUser, jsonEncode(auth.user.toJson()));
+  }
+
+  /// Exchanges the stored long-lived refresh token (valid 7 days) for a new
+  /// access token. The access token only lasts 60 minutes, so Android
+  /// killing the app process (e.g. swiping it from Recents) and the officer
+  /// reopening it later than that would otherwise look like an automatic
+  /// logout even though the officer never signed out. Returns true if the
+  /// session was successfully renewed.
+  Future<bool> tryRefreshToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    final refreshToken = prefs.getString(AppConstants.keyRefreshToken);
+    if (refreshToken == null || refreshToken.isEmpty) return false;
+
+    try {
+      final url = Uri.parse('${await baseUrl}/auth/refresh');
+      final response = await http.post(
+        url,
+        headers: await _headers(needsAuth: false),
+        body: jsonEncode({'refresh_token': refreshToken}),
+      );
+      if (response.statusCode != 200) return false;
+
+      final data = jsonDecode(response.body);
+      final newAccessToken = data['access_token'] as String?;
+      final newRefreshToken = data['refresh_token'] as String?;
+      if (newAccessToken == null || newAccessToken.isEmpty) return false;
+
+      _cachedToken = newAccessToken;
+      await prefs.setString(AppConstants.keyToken, newAccessToken);
+      if (newRefreshToken != null && newRefreshToken.isNotEmpty) {
+        await prefs.setString(AppConstants.keyRefreshToken, newRefreshToken);
+      }
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<UserModel?> getCachedUser() async {
@@ -144,6 +183,7 @@ class ApiService {
     _cachedToken = null;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(AppConstants.keyToken);
+    await prefs.remove(AppConstants.keyRefreshToken);
     await prefs.remove(AppConstants.keyUser);
   }
 

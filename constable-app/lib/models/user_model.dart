@@ -80,12 +80,14 @@ class OfficerProfile {
 
 class AuthResponse {
   final String accessToken;
+  final String? refreshToken;
   final String tokenType;
   final bool mustChangePassword;
   final UserModel user;
 
   AuthResponse({
     required this.accessToken,
+    this.refreshToken,
     required this.tokenType,
     required this.mustChangePassword,
     required this.user,
@@ -94,6 +96,7 @@ class AuthResponse {
   factory AuthResponse.fromJson(Map<String, dynamic> json) {
     return AuthResponse(
       accessToken: json['access_token'] ?? '',
+      refreshToken: json['refresh_token'],
       tokenType: json['token_type'] ?? 'bearer',
       mustChangePassword: json['must_change_password'] ?? false,
       user: UserModel.fromJson(json['user'] ?? {}),

@@ -594,7 +594,7 @@ export const Overview: React.FC<Props> = ({ onNavigate }) => {
               <BarChart data={hourlyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
                 <XAxis dataKey="hour" tick={{ fontSize: 11, fill: '#64748B' }} stroke="#E2E8F0" />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#64748B' }} stroke="#E2E8F0" />
+                <YAxis allowDecimals={false} domain={[0, (max: number) => Math.max(max, 1)]} tick={{ fontSize: 11, fill: '#64748B' }} stroke="#E2E8F0" />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: '#FFFFFF',
@@ -711,7 +711,7 @@ export const Overview: React.FC<Props> = ({ onNavigate }) => {
               <LineChart data={trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
                 <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#64748B' }} stroke="#E2E8F0" />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#64748B' }} stroke="#E2E8F0" />
+                <YAxis allowDecimals={false} domain={[0, (max: number) => Math.max(max, 1)]} tick={{ fontSize: 11, fill: '#64748B' }} stroke="#E2E8F0" />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: '#FFFFFF',

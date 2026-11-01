@@ -52,7 +52,23 @@ class _LoginScreenState extends State<LoginScreen> {
           _navigateToApp(context);
         }
       } catch (_) {
-        // Token invalid or expired, stay on login
+        // Access token expired (e.g. the app process was killed - such as
+        // being removed from Recents - for longer than its 60 minute
+        // lifetime). Try the long-lived refresh token before falling back
+        // to the login screen, so the officer isn't logged out just for
+        // reopening the app later.
+        final refreshed = await _apiService.tryRefreshToken();
+        if (refreshed) {
+          try {
+            await _apiService.getMe();
+            if (mounted) {
+              _navigateToApp(context);
+            }
+            return;
+          } catch (_) {
+            // Still invalid even after refresh - stay on login
+          }
+        }
       }
     }
   }

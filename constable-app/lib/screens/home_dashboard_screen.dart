@@ -520,8 +520,8 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   Expanded(
                     child: Text(
                       isTracking
-                          ? 'Duty monitoring is ON (mandatory 09:30 - 18:00). This cannot be paused from the app.'
-                          : 'Outside duty monitoring window (09:30 - 18:00). Monitoring resumes automatically.',
+                          ? 'Duty monitoring is ON (mandatory 09:00 - 18:00). This cannot be paused from the app.'
+                          : 'Outside duty monitoring window (09:00 - 18:00). Monitoring resumes automatically.',
                       style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.3),
                     ),
                   ),
