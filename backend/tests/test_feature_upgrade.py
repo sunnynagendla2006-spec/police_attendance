@@ -33,7 +33,12 @@ async def test_duty_assignments_lifecycle(async_client: AsyncClient):
     assert avail_resp.status_code == 200
     constables = avail_resp.json()
     assert len(constables) > 0
-    constable_user_id = constables[0]["user_id"]
+    # Must be the same constable that logs in via mobile number "9876543210"
+    # below (seeded as constable101 / ELR-PC-101), not just constables[0] -
+    # other tests in this run may seed additional officer_profiles, so index
+    # 0 is not guaranteed to be this one.
+    target = next((c for c in constables if c.get("officer_id") == "ELR-PC-101"), constables[0])
+    constable_user_id = target["user_id"]
 
     # 4. Create assignment
     create_resp = await async_client.post("/api/v1/assignments", headers=admin_headers, json={

@@ -287,15 +287,17 @@ async def get_active_assignment_for_constable(
 
     # 1. Exact active assignment valid at ref_time
     asgn = await db.location_assignments.find_one({
-        "$or": [
-            {"user_id": user_id_or_officer_id},
-            {"officer_id": user_id_or_officer_id}
+        "$and": [
+            {"$or": [
+                {"user_id": user_id_or_officer_id},
+                {"officer_id": user_id_or_officer_id}
+            ]},
+            {"$or": [
+                {"end_time": None},
+                {"end_time": {"$gte": ref_time}}
+            ]}
         ],
         "start_time": {"$lte": ref_time},
-        "$or": [
-            {"end_time": None},
-            {"end_time": {"$gte": ref_time}}
-        ],
         "status": "ACTIVE"
     }, sort=[("start_time", -1)])
 
