@@ -153,7 +153,7 @@ class ApiService {
   Future<HeadquartersModel> getActiveHeadquarters() async {
     try {
       final url = Uri.parse('${await baseUrl}/headquarters/active');
-      final response = await http.get(url, headers: await _headers(needsAuth: true));
+      final response = await _authorizedGet(url);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -201,6 +201,31 @@ class ApiService {
     return headers;
   }
 
+  /// Authenticated GET/POST wrappers that transparently refresh the access
+  /// token and retry once on a 401. The access token only lives 60 minutes
+  /// while duty tracking runs continuously for up to 9 hours (09:00-18:00),
+  /// so without this every call (location pings, offline queue sync,
+  /// attendance, app usage...) would start failing an hour into the duty
+  /// window - observations would pile up in the offline queue, never sync,
+  /// and the officer would show as "Location Stale" with no recorded entry
+  /// for the rest of the day even though the app was tracking the whole
+  /// time.
+  Future<http.Response> _authorizedGet(Uri url) async {
+    var response = await http.get(url, headers: await _headers(needsAuth: true));
+    if (response.statusCode == 401 && await tryRefreshToken()) {
+      response = await http.get(url, headers: await _headers(needsAuth: true));
+    }
+    return response;
+  }
+
+  Future<http.Response> _authorizedPost(Uri url, {Object? body}) async {
+    var response = await http.post(url, headers: await _headers(needsAuth: true), body: body);
+    if (response.statusCode == 401 && await tryRefreshToken()) {
+      response = await http.post(url, headers: await _headers(needsAuth: true), body: body);
+    }
+    return response;
+  }
+
   // 1. Login with Hardware Device Binding
   Future<AuthResponse> login(
     String username,
@@ -242,9 +267,8 @@ class ApiService {
     required String confirmNewPassword,
   }) async {
     final url = Uri.parse('${await baseUrl}/auth/change-password');
-    final response = await http.post(
+    final response = await _authorizedPost(
       url,
-      headers: await _headers(needsAuth: true),
       body: jsonEncode({
         'old_password': oldPassword,
         'new_password': newPassword,
@@ -261,7 +285,7 @@ class ApiService {
   // 3. Get Current User Info
   Future<UserModel> getMe() async {
     final url = Uri.parse('${await baseUrl}/auth/me');
-    final response = await http.get(url, headers: await _headers(needsAuth: true));
+    final response = await _authorizedGet(url);
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
@@ -277,11 +301,7 @@ class ApiService {
   // 4. Submit Location Observation
   Future<Map<String, dynamic>> submitObservation(LocationObservationModel obs) async {
     final url = Uri.parse('${await baseUrl}/location/observations');
-    final response = await http.post(
-      url,
-      headers: await _headers(needsAuth: true),
-      body: jsonEncode(obs.toJson()),
-    );
+    final response = await _authorizedPost(url, body: jsonEncode(obs.toJson()));
 
     if (response.statusCode == 200 || response.statusCode == 201) {
       return jsonDecode(response.body);
@@ -294,11 +314,7 @@ class ApiService {
   // 4b. Submit Digital Wellbeing / App Usage Summary
   Future<Map<String, dynamic>> submitAppUsage(Map<String, dynamic> payload) async {
     final url = Uri.parse('${await baseUrl}/app-usage');
-    final response = await http.post(
-      url,
-      headers: await _headers(needsAuth: true),
-      body: jsonEncode(payload),
-    );
+    final response = await _authorizedPost(url, body: jsonEncode(payload));
 
     if (response.statusCode == 200 || response.statusCode == 201) {
       return jsonDecode(response.body);
@@ -312,9 +328,8 @@ class ApiService {
   Future<Map<String, dynamic>> syncOfflineObservations(List<LocationObservationModel> observations) async {
     if (observations.isEmpty) return {'processed_count': 0};
     final url = Uri.parse('${await baseUrl}/location/sync');
-    final response = await http.post(
+    final response = await _authorizedPost(
       url,
-      headers: await _headers(needsAuth: true),
       body: jsonEncode({
         'observations': observations.map((o) => o.toJson()).toList(),
       }),
@@ -336,7 +351,7 @@ class ApiService {
       if (endDate != null) queryParams['end_date'] = endDate;
 
       final uri = Uri.parse('${await baseUrl}/attendance').replace(queryParameters: queryParams.isNotEmpty ? queryParams : null);
-      var response = await http.get(uri, headers: await _headers(needsAuth: true));
+      var response = await _authorizedGet(uri);
 
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
@@ -350,7 +365,7 @@ class ApiService {
 
       // Fallback to /attendance/my-attendance
       final myUri = Uri.parse('${await baseUrl}/attendance/my-attendance');
-      response = await http.get(myUri, headers: await _headers(needsAuth: true));
+      response = await _authorizedGet(myUri);
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         if (decoded is Map && decoded['history'] is List) {
@@ -371,9 +386,8 @@ class ApiService {
     required String requestedChanges,
   }) async {
     final url = Uri.parse('${await baseUrl}/attendance/correction-requests');
-    final response = await http.post(
+    final response = await _authorizedPost(
       url,
-      headers: await _headers(needsAuth: true),
       body: jsonEncode({
         'visit_id': visitId,
         'reason': reason,
@@ -391,7 +405,7 @@ class ApiService {
   Future<Map<String, dynamic>?> getMyActiveAssignment() async {
     try {
       final url = Uri.parse('${await baseUrl}/assignments/my');
-      final response = await http.get(url, headers: await _headers(needsAuth: true));
+      final response = await _authorizedGet(url);
       if (response.statusCode == 200 && response.body.isNotEmpty && response.body != 'null') {
         final data = jsonDecode(response.body);
         final prefs = await SharedPreferences.getInstance();
@@ -415,9 +429,8 @@ class ApiService {
     final deviceId = await getOrCreateDeviceId();
     final nowIso = DateTime.now().toUtc().toIso8601String();
 
-    final response = await http.post(
+    final response = await _authorizedPost(
       url,
-      headers: await _headers(needsAuth: true),
       body: jsonEncode({
         'snapshot_window': snapshotWindow,
         'scheduled_time': scheduledTime ?? nowIso,
@@ -444,9 +457,8 @@ class ApiService {
     final url = Uri.parse('${await baseUrl}/app-usage');
     final todayStr = DateTime.now().toIso8601String().split('T')[0];
 
-    await http.post(
+    await _authorizedPost(
       url,
-      headers: await _headers(needsAuth: true),
       body: jsonEncode({
         'date': todayStr,
         'usage_items': appUsageItems,
