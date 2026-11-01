@@ -75,7 +75,7 @@ class LocationTrackingService extends ChangeNotifier {
   }
 
   /// True while the current local device time falls inside the mandatory
-  /// duty monitoring window (09:00 - 18:00). Officers cannot opt out of
+  /// duty monitoring window (09:30 - 17:30). Officers cannot opt out of
   /// monitoring during this window from within the app.
   bool isWithinDutyWindow([DateTime? at]) {
     final now = at ?? DateTime.now();
@@ -94,7 +94,7 @@ class LocationTrackingService extends ChangeNotifier {
     }
 
     // Tracking is no longer a manual officer-controlled toggle. It is
-    // enforced automatically for the entire 09:00-18:00 duty window as
+    // enforced automatically for the entire 09:30-17:30 duty window as
     // long as the device is within that window, and a watcher re-checks
     // every minute so it starts/stops itself without any user action.
     await _evaluateDutyWindow();
@@ -184,7 +184,7 @@ class LocationTrackingService extends ChangeNotifier {
 
   /// Stops the active location stream. [officerInitiated] is always false
   /// now that the officer has no manual pause control - this only fires
-  /// when the duty window watcher detects time has passed 18:00.
+  /// when the duty window watcher detects time has passed 17:30.
   Future<void> stopTracking({bool officerInitiated = false}) async {
     _isTracking = false;
     _positionStream?.cancel();
@@ -194,7 +194,7 @@ class LocationTrackingService extends ChangeNotifier {
     await prefs.setBool(AppConstants.keyTrackingActive, false);
     _statusMessage = isWithinDutyWindow()
         ? 'Tracking stopped'
-        : 'Outside duty monitoring window (09:00 - 18:00)';
+        : 'Outside duty monitoring window (09:30 - 17:30)';
     notifyListeners();
   }
 

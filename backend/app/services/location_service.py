@@ -16,7 +16,8 @@ from app.services.geofence_engine import (
 )
 from app.services.attendance_service import (
     process_geofence_transition,
-    get_officer_today_stats_batch
+    get_officer_today_stats_batch,
+    close_stale_open_visit
 )
 from app.services.websocket_manager import ws_manager
 
@@ -85,6 +86,10 @@ async def process_single_observation(
     """Validate and process a location observation through the geofence engine against officer's assigned duty post."""
     user_id = str(user["_id"])
     now = datetime.now(timezone.utc)
+
+    # Close out any visit left OPEN from a previous day before evaluating
+    # this observation, so a fresh entry/exit cycle can start cleanly today.
+    await close_stale_open_visit(db, user_id)
 
     # 1. Resolve the officer's own approved duty location (or primary HQ as fallback)
     target = await resolve_target_facility(db, user_id, obs.observed_at)

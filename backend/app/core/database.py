@@ -36,7 +36,8 @@ async def connect_to_mongodb() -> AsyncIOMotorDatabase:
     logger.info(f"Connecting to MongoDB at {settings.MONGODB_URI}...")
     db_manager.client = AsyncIOMotorClient(
         settings.MONGODB_URI,
-        serverSelectionTimeoutMS=20000
+        serverSelectionTimeoutMS=20000,
+        tz_aware=True
     )
     db_manager.db = db_manager.client[settings.MONGODB_DATABASE]
     

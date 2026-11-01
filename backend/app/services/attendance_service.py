@@ -16,6 +16,61 @@ def format_duration(seconds: Optional[int]) -> str:
     minutes = (seconds % 3600) // 60
     return f"{hours:02d}h {minutes:02d}m"
 
+async def close_stale_open_visit(db: AsyncIOMotorDatabase, user_id: str) -> None:
+    """
+    Auto-closes an attendance visit left OPEN from a previous calendar day.
+
+    Duty tracking stops automatically at the end of the mandatory duty
+    window without the app sending an explicit exit observation (there is
+    no "clock out" action), so an officer still inside the geofence at duty
+    end would otherwise show as "Currently Inside" with duration growing
+    forever into the next day, and the daily attendance ledger would never
+    show a fresh entry for the new day. Call this before evaluating a new
+    observation/transition, and opportunistically when building reports.
+    """
+    open_visit = await db.attendance_visits.find_one({
+        "user_id": user_id,
+        "visit_status": "OPEN"
+    })
+    if not open_visit:
+        return
+
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    entry_at = open_visit["entry_at"]
+    if entry_at.tzinfo is None:
+        entry_at = entry_at.replace(tzinfo=timezone.utc)
+    if entry_at >= today_start:
+        return  # Opened today - leave it open, it's the officer's active session.
+
+    # Use the officer's last known location observation while this visit was
+    # open as the exit point - the best estimate of when they were last
+    # actually present, instead of a duration that grows forever.
+    last_obs = await db.location_observations.find_one(
+        {"user_id": user_id, "observed_at": {"$gte": entry_at}},
+        sort=[("observed_at", -1)]
+    )
+    exit_at = last_obs["observed_at"] if last_obs else entry_at
+    if exit_at.tzinfo is None:
+        exit_at = exit_at.replace(tzinfo=timezone.utc)
+    if exit_at <= entry_at:
+        exit_at = entry_at
+
+    duration_seconds = max(0, int((exit_at - entry_at).total_seconds()))
+
+    await db.attendance_visits.update_one(
+        {"_id": open_visit["_id"]},
+        {"$set": {
+            "exit_at": exit_at,
+            "duration_seconds": duration_seconds,
+            "exit_verification_status": "AUTO_CLOSED",
+            "visit_status": "COMPLETED",
+            "notes": "Auto-closed: duty tracking ended for the day without an explicit exit event.",
+            "updated_at": now
+        }}
+    )
+
 async def process_geofence_transition(
     db: AsyncIOMotorDatabase,
     user_id: str,

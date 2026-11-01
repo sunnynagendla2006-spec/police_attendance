@@ -203,7 +203,7 @@ class ApiService {
 
   /// Authenticated GET/POST wrappers that transparently refresh the access
   /// token and retry once on a 401. The access token only lives 60 minutes
-  /// while duty tracking runs continuously for up to 9 hours (09:00-18:00),
+  /// while duty tracking runs continuously for up to 8 hours (09:30-17:30),
   /// so without this every call (location pings, offline queue sync,
   /// attendance, app usage...) would start failing an hour into the duty
   /// window - observations would pile up in the offline queue, never sync,

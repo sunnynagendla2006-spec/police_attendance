@@ -31,9 +31,9 @@ class AppConstants {
   // Location tracking runs automatically for the full window below and
   // cannot be paused by the officer from within the app.
   static const int dutyStartHour = 9;
-  static const int dutyStartMinute = 0;
-  static const int dutyEndHour = 18;
-  static const int dutyEndMinute = 0;
+  static const int dutyStartMinute = 30;
+  static const int dutyEndHour = 17;
+  static const int dutyEndMinute = 30;
   static const int dutyWindowCheckSeconds = 60;
 
   // Digital Wellbeing

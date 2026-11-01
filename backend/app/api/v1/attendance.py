@@ -12,7 +12,7 @@ from app.schemas.attendance import (
     OfficerAttendanceSummary
 )
 from app.services.auth_service import get_current_user, require_roles
-from app.services.attendance_service import format_duration, get_officer_today_stats
+from app.services.attendance_service import format_duration, get_officer_today_stats, close_stale_open_visit
 from app.services.audit_service import record_audit_log
 from app.services.location_service import resolve_target_facility
 
@@ -113,6 +113,11 @@ async def get_attendance_summary_today(
 
     for p in profiles:
         user_id = p["user_id"]
+
+        # Surface the true state immediately even if the officer hasn't sent
+        # a new observation yet today (e.g. on leave) rather than waiting
+        # for their next ping to clean up yesterday's open session.
+        await close_stale_open_visit(db, user_id)
 
         # Attribute attendance only against the officer's OWN approved duty
         # location (their active assignment, or primary HQ if unassigned) -
