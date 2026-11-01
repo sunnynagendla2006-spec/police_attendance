@@ -118,8 +118,9 @@ export const AppUsageSummaryPage: React.FC = () => {
     return (
       item.officer_name.toLowerCase().includes(q) ||
       item.officer_id.toLowerCase().includes(q) ||
-      item.app_name.toLowerCase().includes(q) ||
-      item.package_name.toLowerCase().includes(q)
+      item.apps_exceeding_threshold.some(
+        (app) => app.app_name.toLowerCase().includes(q) || app.package_name.toLowerCase().includes(q)
+      )
     );
   });
 
@@ -265,29 +266,54 @@ export const AppUsageSummaryPage: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                filteredUsage.map((item) => {
-                  return (
-                    <tr key={item.id} className="hover:bg-slate-50/70 transition">
+                filteredUsage.flatMap((item) => {
+                  const officerCell = (
+                    <td className="py-3 px-4">
+                      <div className="font-bold text-[#172B4D]">{item.officer_name}</div>
+                      <div className="text-[10px] text-slate-400 font-mono">
+                        ID: {item.officer_id}
+                      </div>
+                    </td>
+                  );
+
+                  if (item.apps_exceeding_threshold.length === 0) {
+                    return (
+                      <tr key={item.id} className="hover:bg-slate-50/70 transition">
+                        {officerCell}
+                        <td className="py-3 px-4 text-slate-400">—</td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center space-x-1.5 font-bold text-slate-800">
+                            <Clock className="w-3.5 h-3.5 text-slate-400" />
+                            <span>{item.total_foreground_minutes.toFixed(1)} mins total</span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-slate-400">—</td>
+                        <td className="py-3 px-4 text-right">
+                          <span className="text-[11px] text-emerald-700 font-semibold">
+                            Within Tolerance
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  }
+
+                  return item.apps_exceeding_threshold.map((app, idx) => (
+                    <tr key={`${item.id}-${idx}`} className="hover:bg-slate-50/70 transition">
+                      {idx === 0 ? officerCell : <td className="py-3 px-4" />}
                       <td className="py-3 px-4">
-                        <div className="font-bold text-[#172B4D]">{item.officer_name}</div>
-                        <div className="text-[10px] text-slate-400 font-mono">
-                          ID: {item.officer_id}
-                        </div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="font-semibold text-slate-800">{item.app_name}</div>
+                        <div className="font-semibold text-slate-800">{app.app_name}</div>
                         <div className="text-[10px] text-slate-400 font-mono truncate max-w-xs">
-                          {item.package_name}
+                          {app.package_name}
                         </div>
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center space-x-1.5 font-bold text-slate-800">
                           <Clock className="w-3.5 h-3.5 text-slate-400" />
-                          <span>{item.foreground_minutes.toFixed(1)} mins</span>
+                          <span>{app.foreground_duration_minutes.toFixed(1)} mins</span>
                         </div>
                       </td>
                       <td className="py-3 px-4">
-                        {item.is_approved_work_app ? (
+                        {app.is_work_app ? (
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
                             Approved Work App
                           </span>
@@ -298,18 +324,12 @@ export const AppUsageSummaryPage: React.FC = () => {
                         )}
                       </td>
                       <td className="py-3 px-4 text-right">
-                        {item.exceeds_threshold ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
-                            Exceeds &gt; {policy?.warning_threshold_minutes ?? 30}m Threshold
-                          </span>
-                        ) : (
-                          <span className="text-[11px] text-emerald-700 font-semibold">
-                            Within Tolerance
-                          </span>
-                        )}
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                          Exceeds &gt; {policy?.warning_threshold_minutes ?? 30}m Threshold
+                        </span>
                       </td>
                     </tr>
-                  );
+                  ));
                 })
               )}
             </tbody>

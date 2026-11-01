@@ -611,7 +611,7 @@ class ApiService {
     if (params?.date) q.append('date', params.date);
     if (params?.user_id) q.append('user_id', params.user_id);
     if (params?.only_exceeding_threshold !== undefined) {
-      q.append('only_exceeding_threshold', String(params.only_exceeding_threshold));
+      q.append('exceeding_only', String(params.only_exceeding_threshold));
     }
     if (params?.location_id) q.append('location_id', params.location_id);
     return this.request<AppUsageSummary[]>(`/app-usage?${q.toString()}`);

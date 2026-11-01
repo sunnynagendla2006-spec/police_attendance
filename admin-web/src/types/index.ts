@@ -424,19 +424,26 @@ export interface DeviceRecord {
   last_seen_at?: string | null;
 }
 
-export interface AppUsageSummary {
-  id: string;
-  user_id: string;
-  officer_id: string;
-  officer_name: string;
-  date: string;
+export interface AppUsageExceedingApp {
   package_name: string;
   app_name: string;
-  foreground_minutes: number;
-  is_approved_work_app: boolean;
-  exceeds_threshold: boolean;
-  disclosed_to_user: boolean;
-  submitted_at: string;
+  foreground_duration_minutes: number;
+  is_work_app: boolean;
+}
+
+export interface AppUsageSummary {
+  id: string;
+  officer_id: string;
+  officer_name: string;
+  rank: string;
+  department: string;
+  assigned_location_name: string;
+  reporting_date: string;
+  total_foreground_minutes: number;
+  permission_granted: boolean;
+  apps_count: number;
+  apps_exceeding_threshold: AppUsageExceedingApp[];
+  collected_at: string;
 }
 
 export interface AppUsagePolicyConfig {
