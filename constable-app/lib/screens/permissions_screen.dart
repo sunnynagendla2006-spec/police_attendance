@@ -47,9 +47,15 @@ class _PermissionsScreenState extends State<PermissionsScreen> with WidgetsBindi
   }
 
   bool get _allMandatoryGranted {
+    // Digital Wellbeing / Usage Access is intentionally NOT required here.
+    // The system settings screen Android sends the officer to for this
+    // permission differs by OEM/Android version (and is sometimes missing
+    // entirely on some devices), so it is best-effort only and must never
+    // block an officer from reaching the dashboard and being tracked for
+    // attendance.
     final hasForeground = _locationPermission == LocationPermission.always || _locationPermission == LocationPermission.whileInUse;
     final hasBackground = _locationPermission == LocationPermission.always || _backgroundStatus.isGranted;
-    return _isGpsEnabled && hasForeground && hasBackground && _batteryStatus.isGranted && _usageAccessGranted;
+    return _isGpsEnabled && hasForeground && hasBackground && _batteryStatus.isGranted;
   }
 
   Future<void> _checkAllPermissions() async {
@@ -252,10 +258,10 @@ class _PermissionsScreenState extends State<PermissionsScreen> with WidgetsBindi
 
           _buildStatusRow(
             icon: Icons.hourglass_bottom,
-            title: 'Digital Wellbeing / Usage Access',
+            title: 'Digital Wellbeing / Usage Access (Optional)',
             subtitle: _usageAccessGranted
                 ? 'Screen-time and app-usage reporting enabled'
-                : 'Required: Grant Usage Access so on-duty screen-time can be reported',
+                : 'Optional: enables on-duty screen-time reporting. Location tracking and attendance work without it - the settings screen for this permission varies by phone, so it can be skipped.',
             isGranted: _usageAccessGranted,
             onRequest: _requestUsageAccess,
             buttonText: 'Allow',
